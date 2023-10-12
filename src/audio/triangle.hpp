@@ -23,7 +23,7 @@ public:
         {
             sequencerTimer = sequencerReload + 1;
 
-            if (lengthCounter > 0 && linearCounter > 0)
+            if (lengthCounter > 0 && linearCounterTimer > 0)
                 lookupTablePointer++;
         }
 
@@ -43,7 +43,7 @@ public:
     {
         if (linearCounterReload)
         {
-            linearCounterTimer = linearCounter;
+            linearCounterTimer = linearCounterReloadValue;
         }
         else if (linearCounterTimer > 0)
         {
@@ -64,20 +64,27 @@ public:
         return triangleLookup[lookupTablePointer & 0x1F];
     }
 
+    bool active()
+    {
+        return enabled && lengthCounter > 0 && linearCounterTimer > 0;
+    }
+
     virtual void Reset() override
     {
         control = false;
-        linearCounter = 0;
+        linearCounterReloadValue = 0;
         sequencerReload = 0;
         sequencerTimer = 0;
         lengthCounter = 0;
         linearCounterReload = false;
 
         output = 0;
+
+        enabled = false;
     }
 
     bool control = false;
-    uint8_t linearCounter = 0;
+    uint8_t linearCounterReloadValue = 0;
     uint8_t linearCounterTimer = 0;
 
     uint16_t sequencerReload = 0;

@@ -38,7 +38,8 @@ void Callback(void* buffer, unsigned int frames)
     while (bus.mutex);
     bus.mutex = true;
 
-    float ratio = bus.audioBuffer.size() / frames;
+    //float ratio = bus.audioBuffer.size() / frames;
+    float ratio = 1;
     uint16_t previous = bus.audioBuffer.front();
 
     for (unsigned int i = 0; i < frames; i++)
@@ -46,6 +47,7 @@ void Callback(void* buffer, unsigned int frames)
         if (ratio >= 1)
         {
             buf[i] = bus.audioBuffer.front();
+            if (bus.audioBuffer.size() > 1)
             bus.audioBuffer.pop();
         }
         else
@@ -88,6 +90,14 @@ int main(int argc, char** argv)
         "Palette RAM",
         "OAM",
         "Credits"
+    };
+    
+    std::string audioChannels[] = {
+        "Square 1",
+        "Square 2",
+        "Triangle",
+        "Noise",
+        "DMC"
     };
 
     int menuNumber = 0;
@@ -391,6 +401,32 @@ int main(int argc, char** argv)
                             DrawTextEx(font, "Other keybindings", Vector2{600, 210}, 16, 1, GRAY);
                             DrawTextEx(font, "Toggle\ncompact view", Vector2{650, 235}, 20, 1, BLACK);
                             DrawTextEx(font, "Toggle\nfullscreen", Vector2{650, 285}, 20, 1, BLACK);
+                            break;
+                        case AUDIO:
+                            for (int i = 0; i < 5; i++)
+                            {
+                                double output = bus.apu.getDebugOutput(i);
+
+                                DrawTextEx(font, audioChannels[i].c_str(), Vector2{600, 60.0f + 50 * i}, 16, 1, BLACK);
+                                DrawRectangle(600, 80 + 50 * i, 252, 24, DARKGRAY);
+                                DrawRectangle(602, 82 + 50 * i, 248, 16, GRAY);
+                                DrawRectangle(602, 98 + 50 * i, 248, 4, GetColor(0x6F6F6FFF));
+
+                                Color c = bus.ppu.getColorFromPaletteAddress(0x03 + 0x04 * i);
+                                DrawRectangle(602, 82 + 50 * i, 248 * output, 16, c);
+
+                                uint32_t intColor = ColorToInt(c);
+                                uint32_t darkenedColor = 0xFF;
+                                for (int j = 3; j > 0; j--)
+                                {
+                                    uint16_t component = ((intColor >> (8 * j)) & 0xFF);
+                                    component *= 0.75;
+                                    darkenedColor |= (component << (8 * j));
+                                }
+
+                                DrawRectangle(602, 98 + 50 * i, 248 * output, 4, GetColor(darkenedColor));
+                            }
+                            
                             break;
                         case CPU_STATE:
                         {

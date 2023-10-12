@@ -16,14 +16,16 @@ public:
         sequencerTimer--;
         if (sequencerTimer == 0)
         {
-            sequencerTimer = sequencerReload + 1;
-            sequencerCounter--;
+            sequencerTimer = (sequencerReload + 1) << 1;
+            sequencerCounter = ((sequencerCounter + 1) & 0x07);
         }
 
-        output = CalculateOutput();
+        //output = CalculateOutput();
     }
     void ClockLengthCounter()
     {
+        lengthClocked = true;
+
         if (!enabled)
             lengthCounter = 0;
         else
@@ -60,30 +62,38 @@ public:
     }
     void ClockSweep()
     {
-        SweepUpdatePeriod();
+        sweepDivider--;
+
+        if (sweepDivider == 0)
+        {
+            sweepDivider = sweepPeriodReload + 1;
+            if (sweepEnabled && sweepShift > 0 && sequencerReload >= 8)
+            {
+                SetPeriod(sweepTarget);
+                /*
+                sweepChangeAmount = (sequencerReload >> sweepShift);
+                if (sweepNegate)
+                {
+                    sequencerReload = sequencerReload - sweepChangeAmount;
+                    if (!secondUnit)
+                        sequencerReload--;        
+                }
+                else if (sequencerReload + sweepChangeAmount <= 0x0800)
+                    sequencerReload += sweepChangeAmount;
+                */
+            }
+            /*
+            silenced = false;
+            sweepChangeAmount = (sequencerReload >> sweepShift);
+            if (sequencerReload <= 8 || (!sweepNegate && ((sequencerReload + sweepChangeAmount) >= 0x0800)))
+                silenced = true;
+            */
+        }
 
         if (reloadSweep)
         {
-            if (sweepEnabled && sweepDivider == 0)
-            {
-                SetPeriod(sweepTarget);
-            }
-
-            sweepDivider = sweepPeriodReload;
+            sweepDivider = sweepPeriodReload + 1;
             reloadSweep = false;
-        }
-        else
-        {
-            if (sweepDivider > 0)
-                sweepDivider--;
-            else
-            {
-                if (sweepEnabled && sweepShift > 0 && !silenced)
-                {
-                    SetPeriod(sweepTarget);
-                }
-                sweepDivider = sweepPeriodReload;
-            }
         }
     }
     void SweepUpdatePeriod()
@@ -98,16 +108,18 @@ public:
         else
             sweepTarget = sequencerReload + sweepChangeAmount;
 
-        silenced = (sequencerReload < 8) || (!sweepNegate && (sweepTarget > 0x07FF));
+        
+        silenced = ((sequencerReload < 8) || (!sweepNegate && (sweepTarget > 0x07FF)));
     }
     uint8_t GetOutput() override
     {
+        return CalculateOutput();
         return output;
     }
 
     uint8_t CalculateOutput()
     {
-        if (!silenced && lengthCounter > 0)
+        if (enabled && !silenced && lengthCounter > 0)
         {
             if ((dutyCycles[dutyCycleSelect] >> (sequencerCounter & 0x07)) & 0x01)
             {
@@ -122,8 +134,8 @@ public:
     
     void SetPeriod(uint16_t period)
     {
-        sequencerReload = period;
-        sequencerTimer = sequencerReload + 1;
+        sequencerReload = (period & 0x07FF);
+        //sequencerTimer = sequencerReload;
         SweepUpdatePeriod();
     }
 
@@ -148,6 +160,8 @@ public:
 
     uint16_t sweepTarget = 0;
     uint16_t sequencerTimer = 0;
+
+    bool lengthClocked = false;
 
     virtual void Reset() override
     {
@@ -175,8 +189,11 @@ public:
         output = 0;
 
         silenced = false;
+
+        enabled = false;
     }
 
+    uint8_t sequencerCounter = 0;
 private:
     bool secondUnit;
 
@@ -187,7 +204,6 @@ private:
     uint8_t envelopeDecay = 0;
     uint8_t envelopeDivider = 0;
 
-    uint8_t sequencerCounter = 0;
 
     uint8_t output = 0;
 

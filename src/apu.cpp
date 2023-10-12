@@ -53,23 +53,29 @@ void APU::writeRegisters(uint8_t reg, uint8_t value)
             squareChannel1.volume_envelopeReload = (value & 0x0F);
             break;
         case 0x01:
-            squareChannel1.sweepEnabled = (value & 0x80);
-            squareChannel1.sweepPeriodReload = ((value & 0x70) >> 4);
-            squareChannel1.SweepUpdatePeriod();
-            squareChannel1.sweepNegate = (value & 0x08);
+            squareChannel1.sweepEnabled = ((value & 0x80) > 0);
+            squareChannel1.sweepPeriodReload = ((value >> 4) & 0x07);
+            squareChannel1.sweepNegate = ((value & 0x08) > 0);
             squareChannel1.sweepShift = (value & 0x07);
 
+            squareChannel1.SweepUpdatePeriod();
+
+            // Side effect - sweep is reloaded
             squareChannel1.reloadSweep = true;
             break;
         case 0x02:
-            squareChannel1.sequencerReload = ((squareChannel1.sequencerReload & 0xFF00) | value);
+            squareChannel1.SetPeriod((squareChannel1.sequencerReload & 0x0700) | value);
             break;
         case 0x03:
-            if (squareChannel1.enabled)
+            if (squareChannel1.enabled/* && !(squareChannel1.lengthCounter)*/)
                 squareChannel1.lengthCounter = lengthCounterLoadTable[((value & 0xF8) >> 3)];
-            squareChannel1.sequencerReload = ((squareChannel1.sequencerReload & 0xFF) | (((uint16_t)value & 0x03) << 8));
-            squareChannel1.sequencerTimer = squareChannel1.sequencerReload;
+
+            squareChannel1.SetPeriod((squareChannel1.sequencerReload & 0x00FF) | ((value & 0x07) << 8));
+
+            // Side effect - envelope is restarted
             squareChannel1.envelopeStart = true;
+            // Side effect - phase is reset
+            squareChannel1.sequencerCounter = 0;
             break;
         
         // Pulse 2
@@ -80,29 +86,35 @@ void APU::writeRegisters(uint8_t reg, uint8_t value)
             squareChannel2.volume_envelopeReload = (value & 0x0F);
             break;
         case 0x05:
-            squareChannel2.sweepEnabled = (value & 0x80);
-            squareChannel2.sweepPeriodReload = ((value & 0x70) >> 4);
-            squareChannel2.SweepUpdatePeriod();
-            squareChannel2.sweepNegate = (value & 0x08);
+            squareChannel2.sweepEnabled = ((value & 0x80) > 0);
+            squareChannel2.sweepPeriodReload = ((value & 0x70) >> 4) + 1;
+            squareChannel2.sweepNegate = ((value & 0x08) > 0);
             squareChannel2.sweepShift = (value & 0x07);
 
+            squareChannel2.SweepUpdatePeriod();
+
+            // Side effect - sweep is reloaded
             squareChannel2.reloadSweep = true;
             break;
         case 0x06:
-            squareChannel2.sequencerReload = ((squareChannel2.sequencerReload & 0xFF00) | value);
+            squareChannel2.SetPeriod((squareChannel2.sequencerReload & 0x0700) | value);
             break;
         case 0x07:
-            if (squareChannel2.enabled)
+            if (squareChannel2.enabled && !(squareChannel2.lengthCounter))
                 squareChannel2.lengthCounter = lengthCounterLoadTable[((value & 0xF8) >> 3)];
-            squareChannel2.sequencerReload = ((squareChannel2.sequencerReload & 0xFF) | (((uint16_t)value & 0x03) << 8));
-            squareChannel2.sequencerTimer = squareChannel2.sequencerReload;
+
+            squareChannel2.SetPeriod((squareChannel2.sequencerReload & 0x00FF) | ((value & 0x07) << 8));
+
+            // Side effect - envelope is restarted
             squareChannel2.envelopeStart = true;
+            // Side effect - phase is reset
+            squareChannel2.sequencerCounter = 0;
             break;
 
         // Triangle
         case 0x08:
             triangleChannel.control = (value & 0x80);
-            triangleChannel.linearCounter = (value & 0x7F);
+            triangleChannel.linearCounterReloadValue = (value & 0x7F);
             break;
         case 0x0A:
             triangleChannel.sequencerReload = ((triangleChannel.sequencerReload & 0xFF00) | value);
@@ -191,7 +203,7 @@ uint8_t APU::readRegisters(uint8_t reg)
 }
 
 // a: Frame counter, b: half frame
-#define FRAME_COUNT(a, b) ((a << 1) | b)
+#define FRAME_COUNT(a) (static_cast<uint16_t>(a * 2))
 void APU::clock()
 {
     bool quarterFrameClock = false;
@@ -199,95 +211,96 @@ void APU::clock()
 
     bool reset = false;
 
-    if (clockCounter % 3 == 0)
+    squareChannel1.lengthClocked = false;
+    squareChannel2.lengthClocked = false;
+
+    if (frameClockCounter == FRAME_COUNT(3728.5))
     {
-        if (frameClockCounter == FRAME_COUNT(3728, true))
+        quarterFrameClock = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(7457.5))
+    {
+        quarterFrameClock = true;
+        halfFrameClock = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(11185.5))
+    {
+        quarterFrameClock = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(14915))
+    {
+        // Set IRQ on 4 step mode and if IRQ inhibit is clear
+        if ((modeAndInterrupt & 0xC0) == 0)
+            irq = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(14915.5))
+    {
+        // 5 step sequence
+        if (modeAndInterrupt & 0x80)
         {
-            quarterFrameClock = true;
+            
         }
-        if (frameClockCounter == FRAME_COUNT(7456, true))
-        {
-            quarterFrameClock = true;
-            halfFrameClock = true;
-        }
-        if (frameClockCounter == FRAME_COUNT(11185, true))
-        {
-            quarterFrameClock = true;
-        }
-        if (frameClockCounter == FRAME_COUNT(14914, false))
-        {
-            // Set IRQ on 4 step mode and if IRQ inhibit is clear
-            if ((modeAndInterrupt & 0xC0) == 0)
-                irq = true;
-        }
-        if (frameClockCounter == FRAME_COUNT(14914, true))
-        {
-            // 5 step sequence
-            if (modeAndInterrupt & 0x80)
-            {
-                
-            }
-            // 4 step sequence
-            else
-            {    
-                quarterFrameClock = true;
-                halfFrameClock = true;
-
-                if ((modeAndInterrupt & 0x40) == 0)
-                    irq = true;
-            }
-        }
-        if (frameClockCounter == FRAME_COUNT(14915, false))
-        {
-            if ((modeAndInterrupt & 0xC0) == 0)
-                irq = true;
-            reset = true;
-        }
-        if (frameClockCounter == FRAME_COUNT(18640, true))
-        {
-            quarterFrameClock = true;
-            halfFrameClock = true;
-        }
-        if (frameClockCounter == FRAME_COUNT(18641, false))
-        {
-            reset = true;
-        }
-
-        if (quarterFrameClock)
-        {
-            squareChannel1.ClockEnvelope();
-            squareChannel2.ClockEnvelope();
-
-            triangleChannel.ClockLinearCounter();
-        }
-
-        if (halfFrameClock)
-        {
-            squareChannel1.ClockLengthCounter();
-            squareChannel2.ClockLengthCounter();
-            triangleChannel.ClockLengthCounter();
-
-            squareChannel1.ClockSweep();
-            squareChannel2.ClockSweep();
-        }
-
-        if (clockCounter % 6 == 0)
-        {
-            squareChannel1.Clock();
-            squareChannel2.Clock();
-        }
-        triangleChannel.Clock();
-
-        if (reset)
-            frameClockCounter = 0;
+        // 4 step sequence
         else
-            frameClockCounter++;
+        {    
+            quarterFrameClock = true;
+            halfFrameClock = true;
+
+            if ((modeAndInterrupt & 0x40) == 0)
+                irq = true;
+        }
+    }
+    if (frameClockCounter == FRAME_COUNT(14916))
+    {
+        if ((modeAndInterrupt & 0xC0) == 0)
+            irq = true;
+        reset = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(18640.5))
+    {
+        quarterFrameClock = true;
+        halfFrameClock = true;
+    }
+    if (frameClockCounter == FRAME_COUNT(18641))
+    {
+        reset = true;
     }
 
+    if (quarterFrameClock)
+    {
+        squareChannel1.ClockEnvelope();
+        squareChannel2.ClockEnvelope();
+
+        triangleChannel.ClockLinearCounter();
+    }
+
+    if (halfFrameClock)
+    {
+        squareChannel1.ClockLengthCounter();
+        squareChannel2.ClockLengthCounter();
+        triangleChannel.ClockLengthCounter();
+
+        squareChannel1.ClockSweep();
+        squareChannel2.ClockSweep();
+    }
+
+    triangleChannel.Clock();
+    squareChannel1.Clock();
+    squareChannel2.Clock();
+    
+    if ((frameClockCounter & 0x01) == 1)
+    {
+
+        noiseChannel.Clock();
+    }
+
+    frameClockCounter++;
+
+    if (reset)
+        frameClockCounter = 0;
+    
     squareChannel1.SweepUpdatePeriod();
     squareChannel2.SweepUpdatePeriod();
-
-    clockCounter++;
 }
 
 double APU::getOutput()
@@ -304,5 +317,25 @@ void APU::reset()
     sampleChannel.Reset();
     irq = false;
 
+    writeRegisters(0x15, 0);
     writeRegisters(0x17, 0);
+}
+
+double APU::getDebugOutput(uint8_t channel)
+{
+    switch (channel)
+    {
+        case 0:
+            return ((double) squareChannel1.GetOutput()) / 15.0;
+            break;
+        case 1:
+            return ((double) squareChannel2.GetOutput()) / 15.0;
+            break;
+        case 2:
+            return triangleChannel.active() ? ((double)triangleChannel.GetOutput()) / 15.0 : 0;
+            break;
+        default:
+            return 0;
+            break;
+    }
 }

@@ -19,10 +19,10 @@ public:
     uint8_t readRegisters(uint8_t reg);
 
     double getOutput();
-
     void reset();
-
     bool irq = false;
+
+    double getDebugOutput(uint8_t channel);
 
 private:
     PulseChannel squareChannel1 = PulseChannel(false);

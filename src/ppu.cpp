@@ -281,6 +281,11 @@ void PPU::drawPalette(int x, int y, int paletteNo)
     }
 }
 
+Color PPU::getColorFromPaletteAddress(uint8_t off)
+{
+    return GetColor(palette[readPPU(PALETTE_RAM_OFFSET | off)]);
+}
+
 // Reference: https://www.nesdev.org/wiki/PPU_registers and https://www.nesdev.org/wiki/PPU_scrolling
 void PPU::writeRegisters(uint8_t tRegister, uint8_t value)
 {

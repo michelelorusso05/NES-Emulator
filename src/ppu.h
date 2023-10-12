@@ -38,6 +38,7 @@ public:
     void drawOAM(int x, int y);
     void drawSecondaryOAM(int x, int y);
     void drawPalette(int x, int y, int paletteNo);
+    Color getColorFromPaletteAddress(uint8_t off);
 
     void LoadCartridge(Cartridge *cart)
     {

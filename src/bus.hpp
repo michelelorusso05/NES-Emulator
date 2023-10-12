@@ -169,8 +169,7 @@ public:
     bool busClock()
     {    
         ppu.clock();
-        apu.clock();
-
+    
         if (ppu.checkNMI())
         {
             cpu.nmiPending = true;
@@ -181,7 +180,10 @@ public:
         }
         
         if (totalClockCycles % 3 == 0)
+        {
+            apu.clock();
             cpu.clock();
+        }
 
 
 

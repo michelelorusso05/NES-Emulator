@@ -1,11 +1,11 @@
-// Mapper 001
+// Mapper 105
 
 #include "mapper.hpp"
 
-class Mapper001 : public Mapper 
+class Mapper105 : public Mapper 
 {
 public:
-    Mapper001(uint8_t prgBanks, uint8_t chrBanks, Arrangement initialArrangement, std::vector<uint8_t>* persistentMemory)
+    Mapper105(uint8_t prgBanks, uint8_t chrBanks, Arrangement initialArrangement, std::vector<uint8_t>* persistentMemory)
         :Mapper(prgBanks, chrBanks, initialArrangement)
     {
         control |= 0x0C;
@@ -24,41 +24,40 @@ public:
 
         if (addr >= 0x8000)
         {
-            // 16KB mode
-            if (control & 0x08)
+            if ((timer_prgRomConfig & 0x08) == 0)
             {
-                // Fix last bank, switch other
-                if (control & 0x04)
+                mappedAddr = ((((timer_prgRomConfig >> 1) & 0x03) << 15) | (addr & 0x7FFF));
+            }
+            else if ((control & 0x08) == 0)
+            {
+                // Use second bank
+                mappedAddr = 0x20000 | (((prgBank >> 1) << 15) | (addr & 0x7FFF));
+            }
+            else if ((control & 0x04) == 0)
+            {
+                // Use second bank
+                if (addr >= 0x8000 && addr <= 0xBFFF)
                 {
-                    if (addr >= 0x8000 && addr <= 0xBFFF)
-                    {
-                        mappedAddr = ((prgBank & 0x0F) << 14) | (addr & 0x3FFF);
-                    }
-                    else
-                    {
-                        mappedAddr = ((pBanks - 1) << 14) | (addr & 0x3FFF);
-                    }
+                    mappedAddr = 0x20000 | (addr & 0x3FFF);
                 }
-                // Fix first bank, switch other
                 else
                 {
-                    if (addr >= 0x8000 && addr <= 0xBFFF)
-                    {
-                        mappedAddr = (addr & 0x3FFF);
-                    }
-                    else
-                    {
-                        mappedAddr = (((prgBank & 0x0F) << 14) | (addr & 0x3FFF));
-                    }
+                    mappedAddr = 0x20000 | (((prgBank & 0x0F) << 14) | (addr & 0x3FFF));
                 }
-                return true;
             }
-            // 32KB mode
             else
             {
-                mappedAddr = ((((prgBank >> 1) & 0x07) << 15) | (addr & 0x7FFF));
-                return true;
+                if (addr >= 0x8000 && addr <= 0xBFFF)
+                {
+                    mappedAddr = 0x20000 | (((prgBank & 0x0F) << 14) | (addr & 0x3FFF));
+                }
+                else
+                {
+                    mappedAddr = 0x20000 | ((7 << 14) | (addr & 0x3FFF));
+                }
             }
+
+            return true;
         }
         return false;
     }
@@ -99,11 +98,28 @@ public:
                             break;
                         // CHR0
                         case 1:
-                            chrBank0 = (internalShiftRegister & 0x1F);
+                            timer_prgRomConfig = (internalShiftRegister & 0x1F);
+
+                            if ((internalShiftRegister & 0x10) == 0)
+                            {
+                                // timerIRQ = true;
+                                unlockReq1 = true;
+                                timerDisabled = false;
+                            }
+                            else
+                            {
+                                timerIRQ = false;
+                                timerDisabled = true;
+                                timer = 0;
+                            }
+
+                            if (unlockReq1 && ((internalShiftRegister & 0x10) == 1))
+                                unlocked = true;
+
                             break;
                         // CHR1
                         case 2:
-                            chrBank1 = (internalShiftRegister & 0x1F);
+                            // Unused on NES-EVENT
                             break;
                         // PRG
                         case 3:
@@ -117,7 +133,6 @@ public:
                 }
             }
 
-
             mappedAddr = DATA_UNMAPPED_BUT_SET;
             return true;
         }
@@ -125,78 +140,60 @@ public:
     }
     bool chrBankRead(uint16_t addr, uint32_t& mappedAddr, uint8_t& data) override
     {
-        if (addr > 0x1FFF)
-            return false;
-
-        if (cBanks == 0)
+        if (addr <= 0x1FFF)
         {
             mappedAddr = addr;
             return true;
         }
-
-        // Switch two 4KB banks
-        if (control & 0x10)
-        {
-            // First 4KB bank
-            if (addr >= 0x0000 && addr <= 0x0FFF)
-            {
-                mappedAddr = ((chrBank0) << 12) | (addr & 0x0FFF);
-            }
-            // Second 4KB bank
-            else if (addr >= 0x1000 && addr <= 0x1FFF)
-            {
-                mappedAddr = ((chrBank1) << 12) | (addr & 0x0FFF);
-            }
-
-            return true;
-        }
-        // Switch 8KB bank
-        else
-        {
-            mappedAddr = ((chrBank0 >> 1) << 13) | (addr & 0x1FFF);
-            return true;
-        }
-        
         return false;
     }
     bool chrBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) override
     {
-        if (cBanks > 0)
-            return false;
-
-        if (addr > 0x1FFF)
-            return false;
-        // Switch two 4KB banks
-        if (control & 0x10)
+        if (addr <= 0x1FFF)
         {
-            // First 4KB bank
-            if (addr >= 0x0000 && addr <= 0x0FFF)
-            {
-                mappedAddr = ((chrBank0) << 12) | (addr & 0x0FFF);
-            }
-            // Second 4KB bank
-            else if (addr >= 0x1000 && addr <= 0x1FFF)
-            {
-                mappedAddr = ((chrBank1) << 12) | (addr & 0x0FFF);
-            }
-
+            mappedAddr = addr;
             return true;
         }
-        // Switch 8KB bank
-        else
-        {
-            mappedAddr = ((chrBank0 >> 1) << 13) | (addr & 0x1FFF);
-            return true;
-        }
-        
         return false;
+    }
+
+    bool checkIRQ() override
+    {
+        return timerIRQ;
+    }
+
+    void receiveExternalEvent(uint8_t ev) override
+    {
+        if (ev == EVENT_CPU_CLOCKED)
+        {
+            if (timerDisabled)
+                timer = 0;
+            else
+            {
+                timer++;
+
+                // TODO: implement dip switches
+                if (timer >= 0x20000000)
+                {
+                    printf("time!\n");
+                    timerIRQ = true;
+                    timerDisabled = true;
+                }
+            }
+        }
+    }
+
+    void resetIRQ() override
+    {
+        timerIRQ = false;
     }
 
     std::string getMapperName() override
     {
-        return "SxROM (MMC1)";
+        return "NES-EVENT";
     }
 
+    uint32_t timer = 0;
 private:
     std::vector<uint8_t>* prgRam;
 
@@ -204,9 +201,15 @@ private:
     uint8_t srWriteCount = 0;
 
     uint8_t control = 0;
-    uint8_t chrBank0 = 0;
-    uint8_t chrBank1 = 0;
+    uint8_t timer_prgRomConfig = 0;
     uint8_t prgBank = 0;
+
+
+    bool timerIRQ = false;
+    bool timerDisabled = false;
+
+    bool unlockReq1 = false;
+    bool unlocked = false;
 
     bool wRamEnabled = true;
 

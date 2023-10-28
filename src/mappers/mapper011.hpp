@@ -1,38 +1,31 @@
-// Mapper 000
+// Mapper 011
 
 #include "mapper.hpp"
 
-class Mapper000 : public Mapper 
+class Mapper011 : public Mapper 
 {
 public:
-    Mapper000(uint8_t prgBanks, uint8_t chrBanks, Arrangement initialArrangement, std::vector<uint8_t>* persistentMemory)
+    Mapper011(uint8_t prgBanks, uint8_t chrBanks, Arrangement initialArrangement)
         :Mapper(prgBanks, chrBanks, initialArrangement)
     {
-        prgRam = persistentMemory;
+        reset();
     }
 
     bool prgBankRead(uint16_t addr, uint32_t& mappedAddr, uint8_t& data) override 
     {
-        if (addr >= 0x6000 && addr <= 0x7FFF)
-        {
-            // Read from PRG-RAM
-            data = prgRam->at(addr & 0x1FFF);
-            mappedAddr = DATA_UNMAPPED_BUT_SET;
-            return true;
-        }
         if (addr >= 0x8000 && addr <= 0xFFFF)
         {
-            mappedAddr = pBanks > 1 ? addr & 0x7FFF : addr & 0x3FFF;
+            mappedAddr = ((bankSelect & 0x03) << 15) | (addr & 0x7FFF);
             return true;
         }
         return false;
     }
     bool prgBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) override
     {
-        if (addr >= 0x6000 && addr <= 0x7FFF)
+        if (addr >= 0x8000 && addr <= 0xFFFF)
         {
-            // Write to PRG-RAM
-            prgRam->at(addr & 0x1FFF) = data;
+            bankSelect = data;
+
             mappedAddr = DATA_UNMAPPED_BUT_SET;
             return true;
         }
@@ -42,7 +35,7 @@ public:
     {
         if (addr >= 0x0000 && addr <= 0x1FFF)
         {
-            mappedAddr = addr;
+            mappedAddr = ((bankSelect >> 4) << 13) | (addr & 0x1FFF);
             return true;
         }
         return false;
@@ -59,8 +52,14 @@ public:
 
     std::string getMapperName() override
     {
-        return "NROM";
+        return "COLORDREAMS";
     }
+
+    void reset() override
+    {
+        bankSelect = 0;
+    }
+
 private:
-    std::vector<uint8_t>* prgRam;
+    uint8_t bankSelect = 0;
 };

@@ -2,7 +2,10 @@
 
 #include <cstdint>
 
-#define DATA_UNMAPPED_BUT_SET 0xFFFFFFFF
+#define DATA_UNMAPPED_BUT_SET   0xFFFFFFFF
+
+#define EVENT_A12_CLOCKED       0x00
+#define EVENT_CPU_CLOCKED       0x01
 
 class Mapper {
 public:
@@ -30,7 +33,7 @@ public:
     virtual bool chrBankRead(uint16_t addr, uint32_t& mappedAddr, uint8_t& data) = 0;
     virtual bool chrBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) = 0;
 
-    virtual std::string getMapperName();
+    virtual std::string getMapperName() = 0;
 
     Arrangement getArrangement()
     {
@@ -55,6 +58,14 @@ public:
     virtual void scanlineCallback()
     {
         
+    }
+    virtual void reset()
+    {
+
+    }
+    virtual void receiveExternalEvent(uint8_t ev)
+    {
+
     }
 
 protected:

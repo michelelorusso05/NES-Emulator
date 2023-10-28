@@ -8,30 +8,17 @@ public:
     Mapper004(uint8_t prgBanks, uint8_t chrBanks, Arrangement initialArrangement, std::vector<uint8_t>* persistentMemory)
         :Mapper(prgBanks, chrBanks, initialArrangement)
     {
-        for (uint8_t& reg : registers)
-            reg = 0;
-
-        for (uint32_t& reg : prgBankOffsets)
-            reg = 0;
-
-        for (uint32_t& reg : chrBankOffsets)
-            reg = 0;
-
         prgWindows = prgBanks << 1;
-
-        prgBankOffsets[0] = (0 << 13);
-        prgBankOffsets[1] = (1 << 13);
-        prgBankOffsets[2] = ((prgWindows - 2) << 13);
-        prgBankOffsets[3] = ((prgWindows - 1) << 13);
-
         prgRam = persistentMemory;
+
+        reset();
     }
 
     bool prgBankRead(uint16_t addr, uint32_t& mappedAddr, uint8_t& data) override 
     {
         if (addr >= 0x6000 && addr <= 0x7FFF)
         {
-            // Write to PRG-RAM
+            // Read from PRG-RAM
             data = prgRam->at(addr & 0x1FFF);
             mappedAddr = DATA_UNMAPPED_BUT_SET;
             return true;
@@ -39,7 +26,7 @@ public:
         
         if (addr >= 0x8000 && addr <= 0xFFFF)
         {
-            mappedAddr = prgBankOffsets[(addr & 0x7FFF) >> 13] | (addr & 0x1FFF);
+            mappedAddr = (prgBankOffsets[(addr & 0x7FFF) >> 13] | (addr & 0x1FFF));
             return true;
         }
         
@@ -70,18 +57,18 @@ public:
                     chrBankOffsets[3] = (registers[5] << 10);
 
                     chrBankOffsets[4] = ((registers[0] & 0xFE) << 10);
-                    chrBankOffsets[5] = ((registers[0] << 10) | 0x0400);
+                    chrBankOffsets[5] = (((registers[0] & 0xFE) << 10) | 0x0400);
 
                     chrBankOffsets[6] = ((registers[1] & 0xFE) << 10);
-                    chrBankOffsets[7] = ((registers[1] << 10) | 0x0400);
+                    chrBankOffsets[7] = (((registers[1] & 0xFE) << 10) | 0x0400);
                 }
                 else
                 {
                     chrBankOffsets[0] = ((registers[0] & 0xFE) << 10);
-                    chrBankOffsets[1] = ((registers[0] << 10) | 0x0400);
+                    chrBankOffsets[1] = (((registers[0] & 0xFE) << 10) | 0x0400);
 
                     chrBankOffsets[2] = ((registers[1] & 0xFE) << 10);
-                    chrBankOffsets[3] = ((registers[1] << 10) | 0x0400);
+                    chrBankOffsets[3] = (((registers[1] & 0xFE) << 10) | 0x0400);
 
                     chrBankOffsets[4] = (registers[2] << 10);
                     chrBankOffsets[5] = (registers[3] << 10);
@@ -181,6 +168,11 @@ public:
     }
     bool chrBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) override
     {
+        if (addr >= 0x0000 && addr <= 0x1FFF && cBanks == 0)
+        {
+            mappedAddr = chrBankOffsets[addr >> 10] | (addr & 0x03FF);
+            return true;
+        }
         return false;
     }
 
@@ -218,6 +210,40 @@ public:
         return "TxROM (MMC3)";
     }
 
+    void reset() override
+    {
+        registers[0] = 0;
+        registers[1] = 2;
+        registers[2] = 4;
+        registers[3] = 5;
+        registers[4] = 6;
+        registers[5] = 7;
+        registers[6] = 0;
+        registers[7] = 1;
+
+        chrBankOffsets[0] = ((registers[0] & 0xFE) << 10);
+        chrBankOffsets[1] = (((registers[0] & 0xFE) << 10) | 0x0400);
+
+        chrBankOffsets[2] = ((registers[1] & 0xFE) << 10);
+        chrBankOffsets[3] = (((registers[1] & 0xFE) << 10) | 0x0400);
+
+        chrBankOffsets[4] = (registers[2] << 10);
+        chrBankOffsets[5] = (registers[3] << 10);
+        chrBankOffsets[6] = (registers[4] << 10);
+        chrBankOffsets[7] = (registers[5] << 10);
+
+        prgBankOffsets[0] = (registers[6] << 13);
+        prgBankOffsets[1] = (registers[7] << 13);
+        prgBankOffsets[2] = ((prgWindows - 2) << 13);
+        prgBankOffsets[3] = ((prgWindows - 1) << 13);
+    }
+
+    void receiveExternalEvent(uint8_t ev) override
+    {
+        if (ev == EVENT_A12_CLOCKED)
+            scanlineCallback();
+    }
+
 private:
     std::vector<uint8_t>* prgRam;
 
@@ -243,4 +269,6 @@ private:
 
     uint32_t chrBankOffsets[8];
     uint32_t prgBankOffsets[4];
+
+    uint16_t previouslyAccessedAddress = 0;
 };

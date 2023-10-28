@@ -62,8 +62,36 @@ void Callback(void* buffer, unsigned int frames)
         }
     }
 
+    // HACK: prevent buffer overrun
+    if (bus.audioBuffer.size() > 1024)
+        bus.audioBuffer.empty();
+
     bus.mutex = false;
 }
+
+int keyboardMappings[8] =
+{
+    KEY_L,
+    KEY_K,
+    KEY_BACKSPACE,
+    KEY_ENTER,
+    KEY_W,
+    KEY_S,
+    KEY_A,
+    KEY_D
+};
+
+int gamepadMappings[8] =
+{
+    GAMEPAD_BUTTON_RIGHT_FACE_DOWN,
+    GAMEPAD_BUTTON_RIGHT_FACE_LEFT,
+    GAMEPAD_BUTTON_MIDDLE_LEFT,
+    GAMEPAD_BUTTON_MIDDLE_RIGHT,
+    GAMEPAD_BUTTON_LEFT_FACE_UP,
+    GAMEPAD_BUTTON_LEFT_FACE_DOWN,
+    GAMEPAD_BUTTON_LEFT_FACE_LEFT,
+    GAMEPAD_BUTTON_LEFT_FACE_RIGHT
+};
 
 int main(int argc, char** argv)
 {
@@ -191,6 +219,8 @@ int main(int argc, char** argv)
     onMenuChanged();
 
     char t[64];
+    std::string p1String;
+    std::string p2String;
 
     bool expandedView = true;
     bool fullscreen = false;
@@ -271,47 +301,76 @@ int main(int argc, char** argv)
           
         if (true ^ IsKeyDown(KEY_SPACE))
         {
-            for (int i = 0; i < ((MASTER_CLOCK / PPU_DIVIDER) / 60); i++)
+            for (int i = 0; i < ((MASTER_CLOCK / PPU_DIVIDER) / 59.72); i++)
             {
                 bus.busClock();
             }
         }
-        
 
-        if (IsKeyDown(KEY_W))
-            bus.SetButtonStatus(Controller::Buttons::Up, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Up, false);
-        if (IsKeyDown(KEY_S))
-            bus.SetButtonStatus(Controller::Buttons::Down, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Down, false);
-        if (IsKeyDown(KEY_A))
-            bus.SetButtonStatus(Controller::Buttons::Left, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Left, false);
-        if (IsKeyDown(KEY_D))
-            bus.SetButtonStatus(Controller::Buttons::Right, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Right, false);
+        if (IsGamepadAvailable(0))
+        {
+            const char* name = GetGamepadName(0);
+            if (name != nullptr)
+            {
+                p1String = name;
+                p1String = p1String.substr(0, 18).append("...");
+            }
 
-        if (IsKeyDown(KEY_BACKSPACE))
-            bus.SetButtonStatus(Controller::Buttons::Select, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Select, false);
-        if (IsKeyDown(KEY_ENTER))
-            bus.SetButtonStatus(Controller::Buttons::Start, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::Start, false);
+            p2String = "Keyboard";
 
-        if (IsKeyDown(KEY_K))
-            bus.SetButtonStatus(Controller::Buttons::B, true);
+            for (int i = 0; i < 8; i++)
+            {
+                bus.SetButtonStatusPlayer1((Controller::Buttons)(1 << i), IsGamepadButtonDown(0, gamepadMappings[i]));
+                bus.SetButtonStatusPlayer2((Controller::Buttons)(1 << i), IsKeyDown(keyboardMappings[i]));
+            }
+
+            float x = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X);
+            float y = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_Y);
+
+            if (x >= 0.2)
+                bus.SetButtonStatusPlayer1(Controller::Buttons::Right, true);
+            if (x <= -0.2)
+                bus.SetButtonStatusPlayer1(Controller::Buttons::Left, true);
+            if (y >= 0.2)
+                bus.SetButtonStatusPlayer1(Controller::Buttons::Down, true);
+            if (y <= -0.2)
+                bus.SetButtonStatusPlayer1(Controller::Buttons::Up, true);
+        }
         else
-            bus.SetButtonStatus(Controller::Buttons::B, false);
-        if (IsKeyDown(KEY_L))
-            bus.SetButtonStatus(Controller::Buttons::A, true);
-        else
-            bus.SetButtonStatus(Controller::Buttons::A, false);
+        {
+            p1String = "Keyboard";
+
+            for (int i = 0; i < 8; i++)
+                bus.SetButtonStatusPlayer1((Controller::Buttons)(1 << i), IsKeyDown(keyboardMappings[i]));
+        }
+        if (IsGamepadAvailable(1))
+        {
+            const char* name = GetGamepadName(1);
+            if (name != nullptr)
+            {
+                p2String = name;
+                p2String = p2String.substr(0, 18).append("...");
+            }
+
+            for (int i = 0; i < 8; i++)
+                bus.SetButtonStatusPlayer2((Controller::Buttons)(1 << i), IsGamepadButtonDown(1, gamepadMappings[i]));
+            
+            float x = GetGamepadAxisMovement(1, GAMEPAD_AXIS_LEFT_X);
+            float y = GetGamepadAxisMovement(1, GAMEPAD_AXIS_LEFT_Y);
+
+            if (x >= 0.4)
+                bus.SetButtonStatusPlayer2(Controller::Buttons::Right, true);
+            if (x <= -0.4)
+                bus.SetButtonStatusPlayer2(Controller::Buttons::Left, true);
+            if (y >= 0.4)
+                bus.SetButtonStatusPlayer2(Controller::Buttons::Down, true);
+            if (y <= -0.4)
+                bus.SetButtonStatusPlayer2(Controller::Buttons::Up, true);
+        }
+        else if (!IsGamepadAvailable(0))
+        {
+            p2String = "None";
+        }
 
         BeginDrawing();
             UpdateTexture(texture, bus.ppu.GetScreen());
@@ -323,8 +382,9 @@ int main(int argc, char** argv)
 
             if (fullscreen)
             {
+                // ClearBackground(bus.ppu.getColorFromPaletteAddress(0x00));
                 ClearBackground(BLACK);
-                DrawFPS(10, 10);
+                HideCursor();
                 int width = GetMonitorWidth(cachedMonitor);
                 float scale = ((float) GetMonitorHeight(cachedMonitor)) / 240.0f;
                 DrawTextureEx(texture, Vector2{width / 2 - 256 * scale / 2, 0}, 0, scale, WHITE);
@@ -332,6 +392,7 @@ int main(int argc, char** argv)
             else
             {
                 ClearBackground(RAYWHITE);
+                ShowCursor();
                 if (expandedView)
                 {
                     switch (menuNumber)
@@ -359,7 +420,7 @@ int main(int argc, char** argv)
                                 }
 
                                 DrawTextEx(font, "Mapper: ", Vector2{600, 210}, 16, 1, GRAY);
-                                if (Cartridge::IsMapperSupported(bus.rom->mapperID))
+                                if (bus.rom->IsMapperSupported())
                                 {
                                     sprintf(t, "%d - %s", bus.rom->mapperID, bus.rom->GetMapperName().c_str());
                                     DrawTextEx(font, t, Vector2{600, 230}, 20, 1, BLACK);
@@ -393,10 +454,10 @@ int main(int argc, char** argv)
                             f4Button.SetEnabled(true);
 
                             DrawTextEx(font, "Player 1", Vector2{600, 60}, 16, 1, GRAY);
-                            DrawTextEx(font, "Keyboard", Vector2{600, 80}, 20, 1, BLACK);
+                            DrawTextEx(font, p1String.c_str(), Vector2{600, 80}, 20, 1, BLACK);
 
                             DrawTextEx(font, "Player 2", Vector2{600, 110}, 16, 1, GRAY);
-                            DrawTextEx(font, "po s penz", Vector2{600, 130}, 20, 1, BLACK);
+                            DrawTextEx(font, p2String.c_str(), Vector2{600, 130}, 20, 1, BLACK);
 
                             DrawTextEx(font, "Other keybindings", Vector2{600, 210}, 16, 1, GRAY);
                             DrawTextEx(font, "Toggle\ncompact view", Vector2{650, 235}, 20, 1, BLACK);

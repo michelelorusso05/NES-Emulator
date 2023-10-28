@@ -283,7 +283,7 @@ void PPU::drawPalette(int x, int y, int paletteNo)
 
 Color PPU::getColorFromPaletteAddress(uint8_t off)
 {
-    return GetColor(palette[readPPU(PALETTE_RAM_OFFSET | off)]);
+    return GetColor(palette[paletteRam.at(off)]);
 }
 
 // Reference: https://www.nesdev.org/wiki/PPU_registers and https://www.nesdev.org/wiki/PPU_scrolling
@@ -322,7 +322,7 @@ void PPU::writeRegisters(uint8_t tRegister, uint8_t value)
                     where W is the addressWriteLatch
                 */
                 fineXScroll = value & 0x07;
-                t = (t & ~0x1F) | (value >> 3);
+                t = ((t & ~0x1F) | (value >> 3));
                 addressWriteLatch = true;
             }
             // Write to Y scroll (both coarse and fine)
@@ -332,7 +332,7 @@ void PPU::writeRegisters(uint8_t tRegister, uint8_t value)
                     t: FGH..AB CDE..... <- d: ABCDEFGH
                     w:                  <- 0
                 */
-                t = (t & ~0x73E0) | ((value & 0x07) << 12) | (((uint16_t)(value & 0xF8)) << 2);
+                t = ((t & ~0x73E0) | ((value & 0x07) << 12) | (((uint16_t)(value & 0xF8)) << 2));
                 addressWriteLatch = false;
             }
             break;
@@ -345,8 +345,9 @@ void PPU::writeRegisters(uint8_t tRegister, uint8_t value)
                     t: Z...... ........ <- 0 (bit Z is cleared)
                     w:                  <- 1
                 */
-                t = (uint16_t)((value & 0x3F) << 8) | (t & 0x00FF);
+                t = ((uint16_t)((value & 0x3F) << 8) | (t & 0x00FF));
                 addressWriteLatch = true;
+
             }
             else
             {
@@ -355,7 +356,7 @@ void PPU::writeRegisters(uint8_t tRegister, uint8_t value)
                     v: <...all bits...> <- t: <...all bits...>
                     w:                  <- 0
                 */
-                t = (t & 0xFF00) | value;
+                t = ((t & 0xFF00) | value);
                 v = t;
                 addressWriteLatch = false;
             }
@@ -1011,9 +1012,13 @@ void PPU::clock()
 
     pixel++;
 
+    // MMC3 scanline counter callback
+    // HACK - this callback mechanism is not accurate at all;
+    // it's purely based on the timing values provided at https://www.nesdev.org/wiki/MMC3#IRQ_Specifics.
+    // This does not pass any of the blargg's tests, nor it emulates correct behaviour when 8x16 sprites are used.
     if (ppumask & MASK_RENDERING)
     {
-        if (pixel == 260 && scanline < 240 && cartridge != nullptr)
+        if (pixel == ((control & CONTROL_SPRITE_TABLE) ? 324 : 260) && scanline <= 240 && cartridge != nullptr)
         {
             cartridge->scanlineCallback();
         }

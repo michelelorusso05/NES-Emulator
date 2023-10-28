@@ -26,7 +26,7 @@ public:
 
     uint8_t Read()
     {
-        uint8_t d = data & 0x01;
+        uint8_t d = (data & 0x01);
         data >>= 1;
 
         return d;

@@ -10,8 +10,18 @@
 #include "mappers/mapper002.hpp"
 #include "mappers/mapper003.hpp"
 #include "mappers/mapper004.hpp"
+#include "mappers/mapper007.hpp"
 #include "mappers/mapper009.hpp"
+#include "mappers/mapper011.hpp"
+#include "mappers/mapper028.hpp"
 #include "mappers/mapper066.hpp"
+#include "mappers/mapper105.hpp"
+
+const static uint16_t supportedMappers[] = 
+{
+        0,   1,   2,   3,   4,   7,   9,  11,
+       28,  66, 105
+};
 
 class Cartridge 
 {
@@ -30,9 +40,20 @@ public:
         char unused[5];
     };
 
-    static bool IsMapperSupported(uint16_t mapper)
+
+    static bool IsMapperImplemented(uint16_t mapper)
     {
-        return ((mapper >= 0) && (mapper <= 4)) || (mapper == 9) || (mapper == 66);
+        for (uint16_t i = 0; i < sizeof(supportedMappers) >> 1; i++)
+        {
+            if (supportedMappers[i] == mapper)
+                return true;
+        }
+        return false;
+    }
+
+    bool IsMapperSupported()
+    {
+        return isMapperSupported;
     }
 
     Cartridge(std::string filepath)
@@ -98,7 +119,7 @@ public:
         switch (mapperID)
         {
             case 0:
-                mapper = new Mapper000(header.prgRomBanks, header.chrRomBanks, arr);
+                mapper = new Mapper000(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
                 break;
             case 1:
                 mapper = new Mapper001(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
@@ -112,19 +133,35 @@ public:
             case 4:
                 mapper = new Mapper004(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
                 break;
+            case 7:
+                mapper = new Mapper007(header.prgRomBanks, header.chrRomBanks, arr);
+                break;
             case 9:
                 mapper = new Mapper009(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
+                break;
+            case 11:
+                mapper = new Mapper011(header.prgRomBanks, header.chrRomBanks, arr);
+                break;
+            case 28:
+                mapper = new Mapper028(header.prgRomBanks, header.chrRomBanks, arr);
+                break;
+            case 34:
+                mapper = new Mapper028(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
             case 66:
                 mapper = new Mapper066(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
+            case 105:
+                mapper = new Mapper105(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
+                break;
             default:
-                mapper = new Mapper000(header.prgRomBanks, header.chrRomBanks, arr);
+                mapper = new Mapper000(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
                 break;
         }
 
         isVsGame = header.mapperHiAndFlags7 & 0x01;
         hasSave = header.mapperLoAndFlags6 & 0x02;
+        isMapperSupported = IsMapperImplemented(mapperID);
 
         prgRam.resize(32 * 1024);
         
@@ -161,7 +198,7 @@ public:
         if (mapper->prgBankRead(addr, mapAddr, data))
         {
             if (mapAddr != DATA_UNMAPPED_BUT_SET)
-                data = prgRom.at(mapAddr);
+                data = prgRom.at(mapAddr & (prgRom.size() - 1));
             return true;
         }
         return false;
@@ -171,7 +208,7 @@ public:
         if (mapper->prgBankWrite(addr, mapAddr, data))
         {
             if (mapAddr != DATA_UNMAPPED_BUT_SET)
-                prgRom.at(mapAddr) = data;
+                prgRom.at(mapAddr & (prgRom.size() - 1)) = data;
             return true;
         }
         return false;
@@ -181,7 +218,7 @@ public:
         if (mapper->chrBankRead(addr, mapAddr, data))
         {
             if (mapAddr != DATA_UNMAPPED_BUT_SET)
-                data = chrRom.at(mapAddr);
+                data = chrRom.at(mapAddr & (chrRom.size() - 1));
             return true;
         }
         return false;
@@ -191,10 +228,15 @@ public:
         if (mapper->chrBankWrite(addr, mapAddr, data))
         {            
             if (mapAddr != DATA_UNMAPPED_BUT_SET)
-                chrRom.at(mapAddr) = data;
+                chrRom.at(mapAddr & (chrRom.size() - 1)) = data;
             return true;
         }
         return false;
+    }
+
+    void reset()
+    {
+        mapper->reset();
     }
 
     bool checkIRQ()
@@ -249,14 +291,20 @@ public:
         return hasSave;
     }
 
+    void sendExternalEvent(uint8_t ev)
+    {
+        mapper->receiveExternalEvent(ev);
+    }
+
     iNesHeader header;
     uint16_t mapperID;
+    Mapper* mapper;
 
 private:
     std::string filename;
 
-    Mapper* mapper;
     bool isRomValid = true;
+    bool isMapperSupported;
 
     std::vector<uint8_t> prgRom;
     std::vector<uint8_t> chrRom;

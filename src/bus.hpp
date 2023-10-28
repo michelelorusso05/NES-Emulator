@@ -72,9 +72,13 @@ public:
         ppu.UnloadCartridge();
     }
 
-    void SetButtonStatus(Controller::Buttons b, bool set)
+    void SetButtonStatusPlayer1(Controller::Buttons b, bool set)
     {
         player1.SetButton(b, set);
+    }
+    void SetButtonStatusPlayer2(Controller::Buttons b, bool set)
+    {
+        player2.SetButton(b, set);
     }
 
     // Memory map and registers can be found on NesDEV
@@ -115,7 +119,10 @@ public:
         {
             refreshControllers = (data & 0x01 == 1);
             if (refreshControllers)
+            {
                 player1.Transfer();
+                player2.Transfer();
+            }
             return;
         }
 
@@ -162,6 +169,20 @@ public:
             return apu.readRegisters(addr & 0x1F);
         }
 
+        /*
+        // Famicom disk system registers (FDS is not implemneted)
+        if (addr == 0x4032)
+        {
+            // Report as disk not inserted
+            return 0x07;
+        }
+        if (addr == 0x4033)
+        {
+            // Report good battery voltage
+            return 0x80;
+        }
+        */
+    
         return 0x00;
     }
 
@@ -183,9 +204,10 @@ public:
         {
             apu.clock();
             cpu.clock();
+
+            if (rom != nullptr)
+                rom->sendExternalEvent(0x01);
         }
-
-
 
         if (rom != nullptr && rom->checkIRQ())
         {
@@ -249,6 +271,8 @@ public:
         cpu.reset();
         ppu.reset();
         apu.reset();
+        if (rom != nullptr)
+            rom->reset();
         totalClockCycles = 0;
 
         wRam.fill(0);

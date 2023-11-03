@@ -9,20 +9,19 @@
 //                                                                                    //
 // ---------------------------------------------------------------------------------- //
 //                                                                                    //
+// TODO: Fill the information and license of the exported font here:                  //
 //                                                                                    //
-// Font name:    PixelNES                                                             //
+// Font name:    ....                                                                 //
 // Font creator: ....                                                                 //
 // Font LICENSE: ....                                                                 //
 //                                                                                    //
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include "../../include/raylib.h"
-
 #define COMPRESSED_DATA_SIZE_FONT_PIXELNES 4336
 
 // Font image pixels data compressed (DEFLATE)
 // NOTE: Original pixel data simplified to GRAYSCALE
-static unsigned char fontData_Pixelnes[COMPRESSED_DATA_SIZE_FONT_PIXELNES] = { 0xed,
+static unsigned char fontData_PixelNES[COMPRESSED_DATA_SIZE_FONT_PIXELNES] = { 0xed,
     0xdd, 0x4d, 0x88, 0x24, 0x67, 0x1d, 0xc7, 0xf1, 0xd5, 0x3d, 0x2c, 0xae, 0xb8, 0x20, 0x41, 0x10, 0x77, 0x24, 0x42, 0x72,
     0xd0, 0x83, 0x27, 0x41, 0x6c, 0x82, 0x5e, 0x44, 0xe2, 0x41, 0x76, 0x92, 0x89, 0x95, 0x0c, 0x18, 0x18, 0x74, 0xc8, 0x61,
     0x0f, 0x22, 0x4d, 0xc4, 0x4b, 0x14, 0x14, 0xf6, 0x94, 0x65, 0x37, 0x9e, 0x24, 0x91, 0x1c, 0x96, 0xb0, 0x64, 0x37, 0x35,
@@ -242,7 +241,7 @@ static unsigned char fontData_Pixelnes[COMPRESSED_DATA_SIZE_FONT_PIXELNES] = { 0
     0x00, 0x00, 0x1c, 0x4c, 0x1f, 0x94, 0x03, 0x40, 0xfe, 0x01, 0x2c, 0x5d, 0xfe, 0xff, 0x0f };
 
 // Font characters rectangles data
-static const Rectangle fontRecs_Pixelnes[95] = {
+static const Rectangle fontRecs_PixelNES[95] = {
     { 4, 4, 21 , 32 },
     { 33, 4, 17 , 19 },
     { 58, 4, 9 , 6 },
@@ -342,25 +341,25 @@ static const Rectangle fontRecs_Pixelnes[95] = {
 
 // Font glyphs info data
 // NOTE: No glyphs.image data provided
-static const GlyphInfo fontGlyphs_Pixelnes[95] = {
+static const GlyphInfo fontGlyphs_PixelNES[95] = {
     { 32, 0, 26, 21, { 0 }},
-    { 33, 0, 7, 18, { 0 }},
-    { 34, 0, 7, 10, { 0 }},
-    { 35, 0, 9, 16, { 0 }},
+    { 33, 0, 7, 21, { 0 }},
+    { 34, 0, 7, 21, { 0 }},
+    { 35, 0, 9, 21, { 0 }},
     { 36, 0, 7, 21, { 0 }},
     { 37, 0, 7, 21, { 0 }},
     { 38, 0, 7, 21, { 0 }},
     { 39, 0, 7, 5, { 0 }},
-    { 40, 0, 7, 18, { 0 }},
-    { 41, 0, 7, 18, { 0 }},
-    { 42, 0, 9, 16, { 0 }},
-    { 43, 0, 9, 16, { 0 }},
+    { 40, 0, 7, 21, { 0 }},
+    { 41, 0, 7, 21, { 0 }},
+    { 42, 0, 9, 21, { 0 }},
+    { 43, 0, 9, 21, { 0 }},
     { 44, 0, 23, 5, { 0 }},
-    { 45, 0, 15, 16, { 0 }},
+    { 45, 0, 15, 21, { 0 }},
     { 46, 0, 23, 5, { 0 }},
     { 47, 0, 7, 21, { 0 }},
     { 48, 0, 7, 21, { 0 }},
-    { 49, 0, 7, 18, { 0 }},
+    { 49, 0, 7, 21, { 0 }},
     { 50, 0, 7, 21, { 0 }},
     { 51, 0, 7, 21, { 0 }},
     { 52, 0, 7, 21, { 0 }},
@@ -370,24 +369,24 @@ static const GlyphInfo fontGlyphs_Pixelnes[95] = {
     { 56, 0, 7, 21, { 0 }},
     { 57, 0, 7, 21, { 0 }},
     { 58, 0, 15, 5, { 0 }},
-    { 59, 0, 15, 5, { 0 }},
-    { 60, 0, 9, 18, { 0 }},
-    { 61, 0, 12, 16, { 0 }},
-    { 62, 0, 9, 18, { 0 }},
+    { 59, 0, 15, 21, { 0 }},
+    { 60, 0, 9, 21, { 0 }},
+    { 61, 0, 12, 21, { 0 }},
+    { 62, 0, 9, 21, { 0 }},
     { 63, 0, 7, 21, { 0 }},
     { 64, 0, 7, 21, { 0 }},
     { 65, 0, 7, 21, { 0 }},
     { 66, 0, 7, 21, { 0 }},
     { 67, 0, 7, 21, { 0 }},
     { 68, 0, 7, 21, { 0 }},
-    { 69, 0, 7, 18, { 0 }},
-    { 70, 0, 7, 18, { 0 }},
+    { 69, 0, 7, 21, { 0 }},
+    { 70, 0, 7, 21, { 0 }},
     { 71, 0, 7, 21, { 0 }},
     { 72, 0, 7, 21, { 0 }},
-    { 73, 0, 7, 18, { 0 }},
+    { 73, 0, 7, 21, { 0 }},
     { 74, 0, 7, 21, { 0 }},
     { 75, 0, 7, 21, { 0 }},
-    { 76, 0, 7, 18, { 0 }},
+    { 76, 0, 7, 21, { 0 }},
     { 77, 0, 7, 21, { 0 }},
     { 78, 0, 7, 21, { 0 }},
     { 79, 0, 7, 21, { 0 }},
@@ -395,31 +394,31 @@ static const GlyphInfo fontGlyphs_Pixelnes[95] = {
     { 81, 0, 7, 21, { 0 }},
     { 82, 0, 7, 21, { 0 }},
     { 83, 0, 7, 21, { 0 }},
-    { 84, 0, 7, 18, { 0 }},
+    { 84, 0, 7, 21, { 0 }},
     { 85, 0, 7, 21, { 0 }},
     { 86, 0, 7, 21, { 0 }},
     { 87, 0, 7, 21, { 0 }},
     { 88, 0, 7, 21, { 0 }},
-    { 89, 0, 7, 18, { 0 }},
+    { 89, 0, 7, 21, { 0 }},
     { 90, 0, 7, 21, { 0 }},
-    { 91, 0, 7, 18, { 0 }},
+    { 91, 0, 7, 21, { 0 }},
     { 92, 0, 7, 21, { 0 }},
-    { 93, 0, 7, 18, { 0 }},
-    { 94, 0, -1, 13, { 0 }},
+    { 93, 0, 7, 21, { 0 }},
+    { 94, 0, -1, 21, { 0 }},
     { 95, 0, 26, 21, { 0 }},
-    { 96, 0, -1, 13, { 0 }},
+    { 96, 0, -1, 21, { 0 }},
     { 97, 0, 7, 21, { 0 }},
     { 98, 0, 7, 21, { 0 }},
     { 99, 0, 7, 21, { 0 }},
     { 100, 0, 7, 21, { 0 }},
-    { 101, 0, 7, 18, { 0 }},
-    { 102, 0, 7, 18, { 0 }},
+    { 101, 0, 7, 21, { 0 }},
+    { 102, 0, 7, 21, { 0 }},
     { 103, 0, 7, 21, { 0 }},
     { 104, 0, 7, 21, { 0 }},
-    { 105, 0, 7, 18, { 0 }},
+    { 105, 0, 7, 21, { 0 }},
     { 106, 0, 7, 21, { 0 }},
     { 107, 0, 7, 21, { 0 }},
-    { 108, 0, 7, 18, { 0 }},
+    { 108, 0, 7, 21, { 0 }},
     { 109, 0, 7, 21, { 0 }},
     { 110, 0, 7, 21, { 0 }},
     { 111, 0, 7, 21, { 0 }},
@@ -427,21 +426,21 @@ static const GlyphInfo fontGlyphs_Pixelnes[95] = {
     { 113, 0, 7, 21, { 0 }},
     { 114, 0, 7, 21, { 0 }},
     { 115, 0, 7, 21, { 0 }},
-    { 116, 0, 7, 18, { 0 }},
+    { 116, 0, 7, 21, { 0 }},
     { 117, 0, 7, 21, { 0 }},
     { 118, 0, 7, 21, { 0 }},
     { 119, 0, 7, 21, { 0 }},
     { 120, 0, 7, 21, { 0 }},
-    { 121, 0, 7, 18, { 0 }},
+    { 121, 0, 7, 21, { 0 }},
     { 122, 0, 7, 21, { 0 }},
-    { 123, 0, 7, 18, { 0 }},
-    { 124, 0, 7, 5, { 0 }},
-    { 125, 0, 7, 18, { 0 }},
-    { 126, 0, -1, 18, { 0 }},
+    { 123, 0, 7, 21, { 0 }},
+    { 124, 0, 7, 21, { 0 }},
+    { 125, 0, 7, 21, { 0 }},
+    { 126, 0, -1, 21, { 0 }},
 };
 
-// Font loading function: Pixelnes
-static Font LoadFont_Pixelnes(void)
+// Font loading function: 
+static Font LoadFont_PixelNES(void)
 {
     Font font = { 0 };
 
@@ -451,8 +450,8 @@ static Font LoadFont_Pixelnes(void)
 
     // Custom font loading
     // NOTE: Compressed font image data (DEFLATE), it requires DecompressData() function
-    int fontDataSize_Pixelnes = 0;
-    unsigned char *data = DecompressData(fontData_Pixelnes, COMPRESSED_DATA_SIZE_FONT_PIXELNES, &fontDataSize_Pixelnes);
+    int fontDataSize_PixelNES = 0;
+    unsigned char *data = DecompressData(fontData_PixelNES, COMPRESSED_DATA_SIZE_FONT_PIXELNES, &fontDataSize_PixelNES);
     Image imFont = { data, 512, 256, 1, 2 };
 
     // Load texture from image
@@ -461,8 +460,8 @@ static Font LoadFont_Pixelnes(void)
 
     // Assign glyph recs and info data directly
     // WARNING: This font data must not be unloaded
-    font.recs = (Rectangle*) fontRecs_Pixelnes;
-    font.glyphs = (GlyphInfo*) fontGlyphs_Pixelnes;
+    font.recs = (Rectangle*) fontRecs_PixelNES;
+    font.glyphs = (GlyphInfo*) fontGlyphs_PixelNES;
 
     return font;
 }

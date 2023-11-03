@@ -169,7 +169,7 @@ public:
             return apu.readRegisters(addr & 0x1F);
         }
 
-        /*
+        
         // Famicom disk system registers (FDS is not implemneted)
         if (addr == 0x4032)
         {
@@ -181,7 +181,7 @@ public:
             // Report good battery voltage
             return 0x80;
         }
-        */
+        
     
         return 0x00;
     }
@@ -189,7 +189,7 @@ public:
     // Returns true if this clock reached audio syncronization
     bool busClock()
     {    
-        ppu.clock();
+        bool frameComplete = ppu.clock();
     
         if (ppu.checkNMI())
         {
@@ -220,7 +220,6 @@ public:
             cpu.irq();
         }
 
-        bool audioSync = false;
         elapsedAudioTime += timePerNESClock;
 
         if (elapsedAudioTime >= audioPeriod)
@@ -228,42 +227,12 @@ public:
             elapsedAudioTime -= audioPeriod;
             lastGeneratedAudioSample = apu.getOutput();
 
-            while (mutex);
-            mutex = true;
-            audioBuffer.push(lastGeneratedAudioSample * 60000);
-            mutex = false;
-
-            if (audioPointer++ > 512)
-                init = true;
-
-            /*
-            currentBuffer[audioPointer++] = lastGeneratedAudioSample * 60000;
-
-            if (audioPointer == AUDIO_BUFFER_SIZE)
-            {
-                audioPointer = 0;
-                init = true;
-                filled = true;
-
-                if (currentBuffer == buf0)
-                {
-                    currentBuffer = buf1;
-                    usableBuffer = buf0;
-                }
-                else
-                {
-                    currentBuffer = buf0;
-                    usableBuffer = buf1;
-                }
-                
-            }
-            */
-            audioSync = true;
+            audioBuffer.push(lastGeneratedAudioSample * 32767);
         }
         
         totalClockCycles++;
 
-        return audioSync;
+        return frameComplete;
     }
 
     void reset()
@@ -290,13 +259,13 @@ public:
     std::atomic_bool filled = {false};
     std::atomic_bool mutex = {false};
 
-    uint16_t* buf0 = new uint16_t[AUDIO_BUFFER_SIZE];
-    uint16_t* buf1 = new uint16_t[AUDIO_BUFFER_SIZE];
+    int16_t* buf0 = new int16_t[AUDIO_BUFFER_SIZE];
+    int16_t* buf1 = new int16_t[AUDIO_BUFFER_SIZE];
 
-    uint16_t* currentBuffer = buf0;
-    uint16_t* usableBuffer = buf1;
+    int16_t* currentBuffer = buf0;
+    int16_t* usableBuffer = buf1;
 
-    std::queue<uint16_t> audioBuffer;
+    std::queue<int16_t> audioBuffer;
 
 private:
     uint8_t fetched;

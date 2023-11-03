@@ -101,6 +101,7 @@ public:
     {
         return &(lookup[op].name);
     }
+    std::string GetDisassembledInstructions(uint8_t numberOfInstructions);
 
     bool isInBRK = false;
 

@@ -14,7 +14,7 @@ public:
     PPU(Bus* master);
     ~PPU();
 
-    void clock();
+    bool clock();
     void reset();
 
     void writeRegisters(uint8_t tRegister, uint8_t value);
@@ -26,7 +26,7 @@ public:
 
     uint8_t* GetScreen()
     {
-        return bufferedScreen;
+        return screen;
     }
 
     void SetPixel(uint8_t x, uint8_t y, uint32_t color);
@@ -98,12 +98,7 @@ private:
 
     uint32_t palette[64];
 
-    uint8_t* screenBuf0;
-    uint8_t* screenBuf1;
-    bool secondBuffer = false;
-
     uint8_t* screen;
-    uint8_t* bufferedScreen;
 
     Bus* bus = nullptr;
 

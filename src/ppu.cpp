@@ -60,11 +60,7 @@ PPU::PPU(Bus* master)
 {
     bus = master;
 
-    screenBuf0 = new uint8_t[256 * 240 * 3];
-    screenBuf1 = new uint8_t[256 * 240 * 3];
-
-    screen = screenBuf0;
-    bufferedScreen = screenBuf1;
+    screen = new uint8_t[256 * 240 * 3];
 
     palette[0x00] = 0x626262FF;
     palette[0x01] = 0x001FB2FF;
@@ -140,8 +136,7 @@ PPU::PPU(Bus* master)
 }
 PPU::~PPU()
 {
-    delete screenBuf0;
-    delete screenBuf1;
+    delete screen;
 }
 
 // Screen is R8G8B8 format
@@ -391,7 +386,7 @@ uint8_t PPU::readRegisters(uint8_t tRegister)
         case 2:
         {
             // Unused bits on the status registers are mapped to the leftovers of the dataBuf latch
-            uint8_t data = (status & 0xE0) | (dataBuf & 0x1F);
+            uint8_t data = (status & 0xE0) /*| (dataBuf & 0x1F)*/;
             // VBlank is always cleared on 0x2002 read
             status &= ~STATUS_VBLANK;
             if (scanline == 241 && pixel == 1)
@@ -606,7 +601,8 @@ void PPU::UpdateShiftRegisters()
 }
 
 // Reference: https://www.nesdev.org/w/images/default/4/4f/Ppu.svg
-void PPU::clock()
+// Returns true if frame is complete
+bool PPU::clock()
 {
     // Visible scanlines
     if (scanline >= -1 && scanline <= 239)
@@ -871,6 +867,7 @@ void PPU::clock()
     // Postrender scanline
     else if (scanline == 240)
     {
+        /*
         // V-Sync
         if (pixel == 0)
         {
@@ -886,6 +883,7 @@ void PPU::clock()
                 bufferedScreen = screenBuf1;
             }
         }
+        */
     }
     // vBlank scanlines
     else if (scanline >= 241 && scanline <= 260)
@@ -1033,14 +1031,16 @@ void PPU::clock()
             scanline = -1;
             frame++;
             oddFrame = !oddFrame;
+            return true;
         }
     }
+    return false;
 }
 
 void PPU::reset()
 {
     for (int i = 0; i < 256 * 240 * 3; i++)
-        screenBuf0[i] = 0;
+        screen[i] = 0;
 
     vRamBank0.fill(0);
     vRamBank1.fill(0);

@@ -1656,3 +1656,122 @@ uint8_t CPU::JAM()
     halted = true;
     return 0;
 }
+
+#include <sstream>
+#include <iomanip>
+
+std::string CPU::GetDisassembledInstructions(uint8_t numberOfInstructions)
+{
+    std::stringstream ss;
+    
+    uint16_t p = pc;
+    uint8_t opcode;
+
+    for (int i = 0; i < numberOfInstructions; i++)
+    {
+        opcode = read(p);
+        ss << "0x" << std::setfill('0') << std::setw(4) << std::hex << p << "\t\t" << lookup[opcode].name;
+
+        // Implicit (nothing)
+        if (lookup[opcode].addrmode == &CPU::IMP)
+            ;
+        // Immediate (#value)
+        else if (lookup[opcode].addrmode == &CPU::IMM)
+        {
+            p++;
+            ss << '\t' << '#' << std::setw(2) << std::hex << (int) read(p);
+        }
+        // Zero page (0x00addr)
+        else if (lookup[opcode].addrmode == &CPU::ZP0)
+        {
+            p++;
+            ss << '\t' << "0x" << std::setw(2) << std::hex << (int) read(p);
+        }
+        // Zero page X (0x00addr, X)
+        else if (lookup[opcode].addrmode == &CPU::ZPX)
+        {
+            p++;
+            ss << '\t' << "0x" << std::setw(2) << std::hex << (int) read(p) << ", X";
+        }
+        // Zero page Y (0x00addr, Y)
+        else if (lookup[opcode].addrmode == &CPU::ZPY)
+        {
+            p++;
+            ss << '\t' << "0x" << std::setw(2) << std::hex << (int) read(p) << ", Y";
+        }
+        // Relative (0xaddr)
+        else if (lookup[opcode].addrmode == &CPU::REL)
+        {
+            p++;
+            int8_t offset = read(p);
+            ss << '\t' << "0x" << std::setw(4) << std::hex << (int) (p + 1 + offset);
+        }
+        // Absolute (0xaddr)
+        else if (lookup[opcode].addrmode == &CPU::ABS)
+        {
+            p++;
+            uint8_t lo = read(p);
+            p++;
+            uint8_t hi = read(p);
+            uint16_t a = (lo | (hi << 8));
+
+            ss << '\t' << "0x" << std::setw(4) << std::hex << a;
+        }
+        // Absolute X (0xaddr, X)
+        else if (lookup[opcode].addrmode == &CPU::ABX)
+        {
+            p++;
+            uint8_t lo = read(p);
+            p++;
+            uint8_t hi = read(p);
+            uint16_t a = (lo | (hi << 8));
+
+            ss << '\t' << "0x" << std::setw(4) << std::hex << a << ", X";
+        }
+        // Absolute Y (0xaddr, Y)
+        else if (lookup[opcode].addrmode == &CPU::ABY)
+        {
+            p++;
+            uint8_t lo = read(p);
+            p++;
+            uint8_t hi = read(p);
+            uint16_t a = (lo | (hi << 8));
+
+            ss << '\t' << "0x" << std::setw(4) << std::hex << a << ", Y";
+        }
+        // Indirect ((0xaddr))
+        else if (lookup[opcode].addrmode == &CPU::IND)
+        {
+            p++;
+            uint8_t lo = read(p);
+            p++;
+            uint8_t hi = read(p);
+            uint16_t a = (lo | (hi << 8));
+
+            ss << '\t' << "(0x" << std::setw(4) << std::hex << a << ")";
+        }
+        // Indirect Zero page X ((0x00addr, X))
+        else if (lookup[opcode].addrmode == &CPU::IZX)
+        {
+            p++;
+            uint8_t a = read(p);
+
+            ss << '\t' << "(0x" << std::setw(2) << std::hex << (int) a << ", X)";
+        }
+        // Indirect Zero page Y ((0x00addr), Y)
+        else if (lookup[opcode].addrmode == &CPU::IZY)
+        {
+            p++;
+            uint8_t a = read(p);
+
+            ss << '\t' << "(0x" << std::setw(2) << std::hex << (int) a << "), Y";
+        }
+
+        ss << std::endl;
+
+        // Move one instruction forward
+        p++;
+    }
+
+    return ss.str();
+}

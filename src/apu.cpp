@@ -313,13 +313,13 @@ void APU::clock()
     frameClockCounter = reset ? 0 : frameClockCounter + 1;
 }
 
-
+//#define USE_LINEAR_APPROX
 
 double APU::getOutput()
 {
 #ifdef USE_LINEAR_APPROX
-    double pulse_out = 0.00752 * (squareChannel1.GetValue() + squareChannel2.GetValue());
-    double tnd_out = 0.00851 * triangleChannel.GetOutput();
+    double pulse_out = 0.00752 * (squareChannel1.GetOutput() + squareChannel2.GetOutput());
+    double tnd_out = 0.00851 * triangleChannel.GetOutput() + 0.00494 * noiseChannel.GetOutput();
     double output = pulse_out + tnd_out;
 
     return output;

@@ -1,5 +1,6 @@
 #include <iostream>
 #include "../include/raylib.h"
+#include "../include/tinyfiledialogs.h"
 #include <intrin.h>
 #include <string>
 
@@ -7,6 +8,7 @@
 #include "cartridge.hpp"
 
 #include "gui/button.hpp"
+
 
 // Assets
 #include "../assets/sprites/ArrowButton.h"
@@ -16,57 +18,40 @@
 #include "../assets/sprites/F4Button.h"
 #include "../assets/sprites/GithubButton.h"
 #include "../assets/sprites/WebpageButton.h"
+#include "../assets/sprites/MButton.h"
+#include "../assets/sprites/OButton.h"
 
-#include "../assets/fonts/pixelnes.h"
+#include "../assets/fonts/PixelNES.h"
+
+#include "../assets/icon.h"
 
 std::vector<Button*> Button::buttons;
 
 Bus bus;
+AudioStream stream;
 
 uint8_t counter = 1;
+bool mute = false;
 
 #define LERP(a, b, t) a * (1 - t) + b * t
 #define FRAC(a) a - (int)a
+#define ROUND(a) ((FRAC(a) >= 0.5f) ? (((int) a) + 1) : ((int) a))
 
 void Callback(void* buffer, unsigned int frames)
 {
-    if (!bus.init)
-        return;
+    int16_t* buf = (int16_t*) buffer;
 
-    uint16_t* buf = (uint16_t*) buffer;
-
-    while (bus.mutex);
-    bus.mutex = true;
-
-    //float ratio = bus.audioBuffer.size() / frames;
-    float ratio = 1;
-    uint16_t previous = bus.audioBuffer.front();
-
+    int16_t previous = bus.audioBuffer.front();
+    
     for (unsigned int i = 0; i < frames; i++)
     {
-        if (ratio >= 1)
-        {
-            buf[i] = bus.audioBuffer.front();
-            if (bus.audioBuffer.size() > 1)
+        buf[i] = bus.audioBuffer.front();
+        if (bus.audioBuffer.size() > 1)
             bus.audioBuffer.pop();
-        }
-        else
-        {
-            buf[i] = (uint16_t) LERP((float) previous, (float) bus.audioBuffer.front(), FRAC((float) i * ratio));
 
-            if ((int)i * ratio < (int)(i + 1) * ratio)
-            {
-                previous = bus.audioBuffer.front();
-                bus.audioBuffer.pop();
-            }
-        }
+        buf[i] *= !mute;
     }
 
-    // HACK: prevent buffer overrun
-    if (bus.audioBuffer.size() > 1024)
-        bus.audioBuffer.empty();
-
-    bus.mutex = false;
 }
 
 int keyboardMappings[8] =
@@ -103,11 +88,10 @@ int main(int argc, char** argv)
         CPU_STATE,
         PATTERN_TABLE_A,
         PATTERN_TABLE_B,
-        PALETTES,
-        OAM,
+        PPU_MEMORY,
         CREDITS
     };
-    const int numberOfMenus = 9;
+    const int numberOfMenus = 8;
     std::string menuLabels[] = {
         "Cartridge info",
         "Input & Keys",
@@ -115,8 +99,7 @@ int main(int argc, char** argv)
         "CPU state",
         "Pattern table A",
         "Pattern table B",
-        "Palette RAM",
-        "OAM",
+        "PPU Memory Bus",
         "Credits"
     };
     
@@ -125,27 +108,43 @@ int main(int argc, char** argv)
         "Square 2",
         "Triangle",
         "Noise",
-        "DMC"
+        "DMC (not implemented)"
     };
+
+    char cpuFlagsString[16] = "N\0V\0-\0B\0D\0I\0Z\0C";
 
     int menuNumber = 0;
     int menuChoice = 0;
 
     SetConfigFlags(FLAG_VSYNC_HINT);
     SetTraceLogLevel(LOG_NONE);
-    InitWindow(912, 520, "RICOcHet");
+    InitWindow(924, 520, "RICOcHet");
     SetTargetFPS(60);
+
+    Image temp = { 0 };
+    temp.data = ICON_DATA;
+    temp.format = ICON_FORMAT;
+    temp.height = ICON_WIDTH;
+    temp.width = ICON_HEIGHT;
+    temp.mipmaps = 1;
+
+    Texture2D iconTex = LoadTextureFromImage(temp);
+
+    ImageResize(&temp, 128, 128);
+
+    SetWindowIcon(temp);
+    UnloadImage(temp);
 
     InitAudioDevice();
     SetAudioStreamBufferSizeDefault(128);
-    AudioStream stream = LoadAudioStream(48000, 16, 1);
+    stream = LoadAudioStream(48000, 16, 1);
     bus.SetAudioFrequency(48000);
 
     SetAudioStreamCallback(stream, Callback);
 
     PlayAudioStream(stream);
 
-    Font font = LoadFont_Pixelnes();
+    Font font = LoadFont_PixelNES();
 
     Image img = GenImageColor(256, 240, BLACK);
     ImageFormat(&img, PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8);
@@ -172,10 +171,10 @@ int main(int argc, char** argv)
         }
     }
 
-    Button powerButton(powerButtonData, false, 649, 464, KEY_P, [&]() {
+    Button powerButton(powerButtonData, false, 652, 464, KEY_P, [&]() {
 
     });
-    Button resetButton(resetButtonData, false, 731, 464, KEY_R, [&]() { 
+    Button resetButton(resetButtonData, false, 738, 464, KEY_R, [&]() { 
         bus.reset(); 
     });
 
@@ -183,18 +182,48 @@ int main(int argc, char** argv)
     bool toggleCompactView = false;
     bool toggleFullscreen = false;
 
-    Button f3Button(f3ButtonData, false, 600, 230, KEY_F3, [&]() {
+    Button f3Button(f3ButtonData, false, 602, 352, KEY_F3, [&]() {
         toggleCompactView = true;
     });
-    Button f4Button(f4ButtonData, false, 600, 280, KEY_F4, [&]() {
+    Button f4Button(f4ButtonData, false, 602, 402, KEY_F4, [&]() {
         toggleFullscreen = true;
     });
 
+    const char* filters[1] = {
+        "*.nes"
+    };
+
+    Button selectRomButton(oButtonData, false, 602, 402, KEY_O, [&]() {
+        const char* file = tinyfd_openFileDialog("Load NES rom", GetApplicationDirectory(), 1, filters, NULL, 0);
+        if (file != NULL)
+        {
+            if (cartridge != nullptr)
+                delete cartridge;
+
+            cartridge = new Cartridge(file);
+            if (!cartridge->IsRomValid())
+            {
+                delete cartridge;
+                bus.reset();
+                bus.UnloadRom();
+                cartridge = nullptr;
+            }
+            else
+            {
+                bus.LoadRom(cartridge);
+            }
+        }
+    });
+
+    Button muteButton(mButtonData, false, 602, 402, KEY_M, [&]() {
+        mute = !mute;
+    });
+
     // Credits
-    Button githubButton(githubButtonData, false, 679, 220, KEY_NULL, [&]() {
+    Button githubButton(githubButtonData, false, 682, 251, KEY_NULL, [&]() {
         OpenURL("https://github.com/michelelorusso05");
     });
-    Button webpageButton(webpageButtonData, false, 731, 220, KEY_NULL, [&]() {
+    Button webpageButton(webpageButtonData, false, 738, 251, KEY_NULL, [&]() {
         OpenURL("https://micheleprojects.altervista.org"); 
     });
 
@@ -202,16 +231,18 @@ int main(int argc, char** argv)
     {
         f3Button.SetEnabled(false);
         f4Button.SetEnabled(false);
+        selectRomButton.SetEnabled(false);
+        muteButton.SetEnabled(false);
 
         githubButton.SetEnabled(false);
         webpageButton.SetEnabled(false);
     };
 
-    Button leftArrow(arrowButtonData, false, 556, 124, KEY_LEFT, [&]() {
+    Button leftArrow(arrowButtonData, false, 556, 188, KEY_LEFT, [&]() {
         menuNumber = (menuNumber == 0) ? (numberOfMenus - 1) : menuNumber - 1;
         onMenuChanged();
     });
-    Button rightArrow(arrowButtonData, true, 856, 124, KEY_RIGHT, [&]() { 
+    Button rightArrow(arrowButtonData, true, 868, 188, KEY_RIGHT, [&]() { 
         menuNumber = (menuNumber + 1) % numberOfMenus;
         onMenuChanged();
     });
@@ -263,15 +294,15 @@ int main(int argc, char** argv)
 
             if (expandedView)
             {
-                SetWindowSize(912, 520);
+                SetWindowSize(924, 520);
                 if (!queueReturnFromFullscreen)
-                    SetWindowPosition(GetWindowPosition().x - (912 - 552) / 2, GetWindowPosition().y);
+                    SetWindowPosition(GetWindowPosition().x - (924 - 552) / 2, GetWindowPosition().y);
             }
             else
             {
                 SetWindowSize(552, 520);
                 if (!queueReturnFromFullscreen)
-                    SetWindowPosition(GetWindowPosition().x + (912 - 552) / 2, GetWindowPosition().y);
+                    SetWindowPosition(GetWindowPosition().x + (924 - 552) / 2, GetWindowPosition().y);
             }
 
             queueReturnFromFullscreen = false;
@@ -301,10 +332,8 @@ int main(int argc, char** argv)
           
         if (true ^ IsKeyDown(KEY_SPACE))
         {
-            for (int i = 0; i < ((MASTER_CLOCK / PPU_DIVIDER) / 59.72); i++)
-            {
-                bus.busClock();
-            }
+            // PPU frames are aligned to real frames
+            while (!bus.busClock());
         }
 
         if (IsGamepadAvailable(0))
@@ -313,7 +342,7 @@ int main(int argc, char** argv)
             if (name != nullptr)
             {
                 p1String = name;
-                p1String = p1String.substr(0, 18).append("...");
+                p1String = p1String.substr(0, 16).append("...");
             }
 
             p2String = "Keyboard";
@@ -349,7 +378,7 @@ int main(int argc, char** argv)
             if (name != nullptr)
             {
                 p2String = name;
-                p2String = p2String.substr(0, 18).append("...");
+                p2String = p2String.substr(0, 16).append("...");
             }
 
             for (int i = 0; i < 8; i++)
@@ -379,11 +408,13 @@ int main(int argc, char** argv)
             f3Button.Update();
             f4Button.Update();
             resetButton.Update();
+            selectRomButton.Update();
+            muteButton.Update();
 
             if (fullscreen)
             {
-                // ClearBackground(bus.ppu.getColorFromPaletteAddress(0x00));
-                ClearBackground(BLACK);
+                ClearBackground(bus.ppu.getColorFromPaletteAddress(0x00));
+                //ClearBackground(BLACK);
                 HideCursor();
                 int width = GetMonitorWidth(cachedMonitor);
                 float scale = ((float) GetMonitorHeight(cachedMonitor)) / 240.0f;
@@ -395,86 +426,104 @@ int main(int argc, char** argv)
                 ShowCursor();
                 if (expandedView)
                 {
+                    /*
+                    if (mute)
+                    {
+                        DrawRectangleLines(556, 20, 348, 444, GRAY);
+                        DrawRectangleLines(602, 20, 256, 444, GRAY);
+                        DrawLine(730, 20, 730, 464, GRAY);
+                        DrawLine(729, 20, 729, 464, GRAY);
+                    }
+                    */
+
                     switch (menuNumber)
                     {
                         case CARTRIDGE_INFO:
+                        {
                             if (bus.isRomLoaded)
                             {
-                                DrawTextEx(font, "Filename: ", Vector2{600, 60}, 16, 1, GRAY);
-                                DrawTextEx(font, bus.rom->GetFilename().c_str(), Vector2{600, 80}, 20, 1, BLACK);
+                                DrawTextEx(font, "Filename: ", Vector2{602, 60}, 16, 1, GRAY);
+                                DrawTextEx(font, bus.rom->GetFilename().c_str(), Vector2{602, 80}, 20, 1, BLACK);
 
-                                DrawTextEx(font, "PRG-ROM: ", Vector2{600, 110}, 16, 1, GRAY);
+                                DrawTextEx(font, "PRG-ROM: ", Vector2{602, 110}, 16, 1, GRAY);
                                 sprintf(t, "%dKB", bus.rom->header.prgRomBanks * 16);
-                                DrawTextEx(font, t, Vector2{600, 130}, 20, 1, BLACK);
+                                DrawTextEx(font, t, Vector2{602, 130}, 20, 1, BLACK);
 
-                                DrawTextEx(font, "CHR-ROM: ", Vector2{600, 160}, 16, 1, GRAY);
+                                DrawTextEx(font, "CHR-ROM: ", Vector2{602, 160}, 16, 1, GRAY);
                                 uint8_t nBanks = bus.rom->header.chrRomBanks;
                                 if (nBanks == 0)
                                 {
-                                    DrawTextEx(font, "8KB CHR-RAM", Vector2{600, 180}, 20, 1, BLACK);
+                                    DrawTextEx(font, "8KB CHR-RAM", Vector2{602, 180}, 20, 1, BLACK);
                                 }
                                 else
                                 {
                                     sprintf(t, "%dKB", bus.rom->header.chrRomBanks * 8);
-                                    DrawTextEx(font, t, Vector2{600, 180}, 20, 1, BLACK);
+                                    DrawTextEx(font, t, Vector2{602, 180}, 20, 1, BLACK);
                                 }
 
-                                DrawTextEx(font, "Mapper: ", Vector2{600, 210}, 16, 1, GRAY);
+                                DrawTextEx(font, "Mapper: ", Vector2{602, 210}, 16, 1, GRAY);
                                 if (bus.rom->IsMapperSupported())
                                 {
                                     sprintf(t, "%d - %s", bus.rom->mapperID, bus.rom->GetMapperName().c_str());
-                                    DrawTextEx(font, t, Vector2{600, 230}, 20, 1, BLACK);
+                                    DrawTextEx(font, t, Vector2{602, 230}, 20, 1, BLACK);
                                 }
                                 else
                                 {
                                     sprintf(t, "%d (using mapper 0)", bus.rom->mapperID);
-                                    DrawTextEx(font, t, Vector2{600, 230}, 20, 1, RED);
+                                    DrawTextEx(font, t, Vector2{602, 230}, 20, 1, RED);
                                 }
 
                                 if (bus.rom->IsVsGame())
                                 {
-                                    DrawTextEx(font, "Notes: ", Vector2{600, 260}, 16, 1, GRAY);
-                                    DrawTextEx(font, "VS. System games are\nnot supported", Vector2{600, 280}, 16, 1, RED);
+                                    DrawTextEx(font, "Notes: ", Vector2{602, 260}, 16, 1, GRAY);
+                                    DrawTextEx(font, "VS. System games are\nnot supported", Vector2{602, 280}, 16, 1, RED);
                                 }
                                 else if (bus.rom->HasSave())
                                 {
-                                    DrawTextEx(font, "Savefile: ", Vector2{600, 260}, 16, 1, GRAY);
+                                    DrawTextEx(font, "Savefile: ", Vector2{602, 260}, 16, 1, GRAY);
                                     sprintf(t, "Savedata stored in\n%s.nes.sav", bus.rom->GetFilename().c_str());
-                                    DrawTextEx(font, t, Vector2{600, 280}, 16, 1, BLACK);
+                                    DrawTextEx(font, t, Vector2{602, 280}, 16, 1, BLACK);
                                 }
                             }
                             else
                             {
-                                DrawTextEx(font, "No ROM loaded", Vector2{600, 60}, 16, 1, GRAY);
-                                DrawTextEx(font, "Drag a .nes file here\nto start playing", Vector2{600, 80}, 16, 1, GRAY);
+                                DrawTextEx(font, "No ROM loaded", Vector2{602, 60}, 16, 1, GRAY);
+                                DrawTextEx(font, "Drag a .nes file here\nto start playing\nor select a ROM with\nthe button below", Vector2{602, 80}, 16, 1, GRAY);
                             }
+
+                            selectRomButton.SetEnabled(true);
+                            DrawTextEx(font, "Open a\n.nes file", Vector2{650, 407}, 20, 1, BLACK);
                             break;
+                        }
                         case INPUT:
+                        {
                             f3Button.SetEnabled(true);
                             f4Button.SetEnabled(true);
 
-                            DrawTextEx(font, "Player 1", Vector2{600, 60}, 16, 1, GRAY);
-                            DrawTextEx(font, p1String.c_str(), Vector2{600, 80}, 20, 1, BLACK);
+                            DrawTextEx(font, "Player 1", Vector2{602, 60}, 16, 1, GRAY);
+                            DrawTextEx(font, p1String.c_str(), Vector2{602, 80}, 20, 1, BLACK);
 
-                            DrawTextEx(font, "Player 2", Vector2{600, 110}, 16, 1, GRAY);
-                            DrawTextEx(font, p2String.c_str(), Vector2{600, 130}, 20, 1, BLACK);
+                            DrawTextEx(font, "Player 2", Vector2{602, 110}, 16, 1, GRAY);
+                            DrawTextEx(font, p2String.c_str(), Vector2{602, 130}, 20, 1, BLACK);
 
-                            DrawTextEx(font, "Other keybindings", Vector2{600, 210}, 16, 1, GRAY);
-                            DrawTextEx(font, "Toggle\ncompact view", Vector2{650, 235}, 20, 1, BLACK);
-                            DrawTextEx(font, "Toggle\nfullscreen", Vector2{650, 285}, 20, 1, BLACK);
+                            DrawTextEx(font, "Other keybindings", Vector2{602, 332}, 16, 1, GRAY);
+                            DrawTextEx(font, "Toggle\ncompact view", Vector2{650, 357}, 20, 1, BLACK);
+                            DrawTextEx(font, "Toggle\nfullscreen", Vector2{650, 407}, 20, 1, BLACK);
                             break;
+                        }
                         case AUDIO:
+                        {
                             for (int i = 0; i < 5; i++)
                             {
                                 double output = bus.apu.getDebugOutput(i);
 
-                                DrawTextEx(font, audioChannels[i].c_str(), Vector2{600, 60.0f + 50 * i}, 16, 1, BLACK);
-                                DrawRectangle(600, 80 + 50 * i, 252, 24, DARKGRAY);
-                                DrawRectangle(602, 82 + 50 * i, 248, 16, GRAY);
-                                DrawRectangle(602, 98 + 50 * i, 248, 4, GetColor(0x6F6F6FFF));
+                                DrawTextEx(font, audioChannels[i].c_str(), Vector2{602, 60.0f + 50 * i}, 16, 1, BLACK);
+                                DrawRectangle(602, 80 + 50 * i, 256, 24, DARKGRAY);
+                                DrawRectangle(604, 82 + 50 * i, 252, 16, GRAY);
+                                DrawRectangle(604, 98 + 50 * i, 252, 4, GetColor(0x6F6F6FFF));
 
                                 Color c = bus.ppu.getColorFromPaletteAddress(0x03 + 0x04 * i);
-                                DrawRectangle(602, 82 + 50 * i, 248 * output, 16, c);
+                                DrawRectangle(604, 82 + 50 * i, 252 * output, 16, c);
 
                                 uint32_t intColor = ColorToInt(c);
                                 uint32_t darkenedColor = 0xFF;
@@ -485,106 +534,121 @@ int main(int argc, char** argv)
                                     darkenedColor |= (component << (8 * j));
                                 }
 
-                                DrawRectangle(602, 98 + 50 * i, 248 * output, 4, GetColor(darkenedColor));
+                                DrawRectangle(604, 98 + 50 * i, 252 * output, 4, GetColor(darkenedColor));
+
                             }
+                            muteButton.SetEnabled(true);
+                            DrawTextEx(font, "Toggle\nmute", Vector2{650, 407}, 20, 1, BLACK);
                             
                             break;
+                        }
                         case CPU_STATE:
                         {
                             sprintf(t, "0x%02X\0", bus.cpu.ax);
-                            DrawTextEx(font, "AX", Vector2{ 600, 60 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 600, 80 }, 20, 1, BLACK);
+                            DrawTextEx(font, "AX", Vector2{ 602, 60 }, 16, 1, GRAY);
+                            DrawTextEx(font, t, Vector2{ 602, 80 }, 20, 1, BLACK);
 
                             sprintf(t, "0x%02X\0", bus.cpu.rx);
-                            DrawTextEx(font, "RX", Vector2{ 697, 60 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 697, 80 }, 20, 1, BLACK);
+                            DrawTextEx(font, "RX", Vector2{ 702, 60 }, 16, 1, GRAY);
+                            DrawTextEx(font, t, Vector2{ 702, 80 }, 20, 1, BLACK);
 
                             sprintf(t, "0x%02X\0", bus.cpu.ry);
-                            DrawTextEx(font, "RY", Vector2{ 794, 60 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 794, 80 }, 20, 1, BLACK);
+                            DrawTextEx(font, "RY", Vector2{ 802, 60 }, 16, 1, GRAY);
+                            DrawTextEx(font, t, Vector2{ 802, 80 }, 20, 1, BLACK);
 
                             sprintf(t, "0x%04X\0", bus.cpu.pc);
-                            DrawTextEx(font, "PC", Vector2{ 600, 110 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 600, 130 }, 20, 1, BLACK);
+                            DrawTextEx(font, "PC", Vector2{ 602, 110 }, 16, 1, GRAY);
+                            DrawTextEx(font, t, Vector2{ 602, 130 }, 20, 1, BLACK);
 
                             sprintf(t, "0x%04X\0", bus.cpu.sp);
-                            DrawTextEx(font, "SP", Vector2{ 766, 110 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 766, 130 }, 20, 1, BLACK);
-
-                            sprintf(t, "0x%02X: %s\0", bus.cpu.opcode, (*(bus.cpu.GetMnemonicForOpcode(bus.cpu.opcode))).c_str());
-                            DrawTextEx(font, "Last executed opcode", Vector2{ 600, 160 }, 16, 1, GRAY);
-                            DrawTextEx(font, t, Vector2{ 600, 180 }, 20, 1, BLACK);
+                            DrawTextEx(font, "SP", Vector2{ 774, 110 }, 16, 1, GRAY);
+                            DrawTextEx(font, t, Vector2{ 774, 130 }, 20, 1, BLACK);
 
                             sprintf(t, "0x%02X\0", bus.cpu.status);
-                            DrawTextEx(font, "Status register", Vector2{ 600, 210 }, 16, 1, GRAY);
-                            DrawTextEx(font, "N V U B D I Z C", Vector2{ 600, 230 }, 20, 1, BLACK);
-                            
+                            DrawTextEx(font, "Status register", Vector2{ 602, 160 }, 16, 1, GRAY);
+
                             for (int i = 0; i < 8; i++)
                             {
+                                DrawTextEx(font, (cpuFlagsString + (i << 1)), Vector2{ (602.0f + 26 * i), 180 }, 20, 1, BLACK);
+
                                 if (bus.cpu.status & (0x80 >> i))
-                                    DrawRectangle(600 + 28 * i, 250, 12, 4, BLACK);
+                                    DrawRectangle(602 + 26 * i - 1, 200, 13, 4, BLACK);
                             }
+
+                            DrawTextEx(font, "Disassembler", Vector2{ 602, 210 }, 16, 1, GRAY);
+                            DrawTextEx(font, bus.cpu.GetDisassembledInstructions(10).c_str(), Vector2{ 602, 230 }, 16, 1, BLACK);
 
                             break;
                         }
                         case PATTERN_TABLE_A:
-                            bus.ppu.drawPatternTable(596, 60, 0);
+                        {
+                            bus.ppu.drawPatternTable(602, 94, 0);
                             break;
+                        }
                         case PATTERN_TABLE_B:
-                            bus.ppu.drawPatternTable(596, 60, 1);
+                        {
+                            bus.ppu.drawPatternTable(602, 94, 1);
                             break;
-                        case PALETTES:
-                            DrawTextEx(font, "Background", Vector2{597, 60}, 16, 1, BLACK);
+                        }
+                        case PPU_MEMORY:
+                        {
+                            DrawTextEx(font, "Palette memory", Vector2{632, 60}, 20, 1, BLACK);
+                            DrawLineEx(Vector2{602, 70}, Vector2{628, 70}, 2, BLACK);
+                            DrawLineEx(Vector2{832, 70}, Vector2{858, 70}, 2, BLACK);
+                            DrawTextEx(font, "Background", Vector2{613, 90}, 16, 1, BLACK);
                             for (int i = 0; i < 4; i++)
                             {
-                                bus.ppu.drawPalette(603, 80 + 26 * i, i);
+                                bus.ppu.drawPalette(618, 110 + 26 * i, i);
                             }
 
-                            DrawTextEx(font, "Sprites", Vector2{754, 60}, 16, 1, BLACK);
+                            DrawTextEx(font, "Sprites", Vector2{750, 90}, 16, 1, BLACK);
                             for (int i = 0; i < 4; i++)
                             {
-                                bus.ppu.drawPalette(741, 80 + 26 * i, i | 4);
+                                bus.ppu.drawPalette(738, 110 + 26 * i, i | 4);
                             }
-                            break;
-                        case OAM:
-                            DrawTextEx(font, "Primary", Vector2{686, 60}, 16, 1, BLACK);
-                            bus.ppu.drawOAM(660, 80);
 
-                            DrawTextEx(font, "Secondary", Vector2{674, 208}, 16, 1, BLACK);
-                            bus.ppu.drawSecondaryOAM(660, 228);
+                            DrawTextEx(font, "OAM", Vector2{709, 225}, 20, 1, BLACK);
+                            DrawLineEx(Vector2{602, 235}, Vector2{704, 235}, 2, BLACK);
+                            DrawLineEx(Vector2{756, 235}, Vector2{858, 235}, 2, BLACK);
+                            DrawTextEx(font, "Primary", Vector2{690, 255}, 16, 1, BLACK);
+                            bus.ppu.drawOAM(666, 275);
+
+                            DrawTextEx(font, "Secondary", Vector2{679, 410}, 16, 1, BLACK);
+                            bus.ppu.drawSecondaryOAM(666, 430);
                             break;
+                        }
                         case CREDITS:
+                        {
                             githubButton.SetEnabled(true);
                             webpageButton.SetEnabled(true);
 
-                            DrawTextEx(font, "What", Vector2{600, 60}, 16, 1, GRAY);
-                            DrawTextEx(font, "RICOcHet NES emulator", Vector2{600, 80}, 18, 1, BLACK);
-
-                            DrawTextEx(font, "Who", Vector2{600, 110}, 16, 1, GRAY);
-                            DrawTextEx(font, "Michele Lorusso", Vector2{600, 130}, 20, 1, BLACK);
-
-                            DrawTextEx(font, "When", Vector2{600, 160}, 16, 1, GRAY);
-                            DrawTextEx(font, "Built 12/09/2023", Vector2{600, 180}, 20, 1, BLACK);
+                            DrawTextureEx(iconTex, Vector2{622, 151}, 0, 2, WHITE);
+                            DrawTextEx(font, "RICOcHet", Vector2{694, 151}, 24, 1, BLACK);
+                            DrawTextEx(font, "By Michele\nLorusso", Vector2{694, 181}, 16, 1, GRAY); 
+                            DrawTextEx(font, "1.0 - 01/11/2023", Vector2{636, 225}, 16, 1, GRAY);
 
                             break;
+                        }
                     }      
                 }
 
+                // Draw screen
                 DrawTextureEx(texture, Vector2{ 20, 20 }, 0, 2, WHITE);
 
+                // Draw top-left clipping
                 DrawRectangle(20, 20, 4, 2, RAYWHITE);
                 DrawRectangle(20, 20, 2, 4, RAYWHITE);
-
+                // Draw top-right clipping
                 DrawRectangle(20 + 512 - 4, 20, 4, 2, RAYWHITE);
                 DrawRectangle(20 + 512 - 2, 20, 2, 4, RAYWHITE);
-
+                // Draw bottom-left clipping
                 DrawRectangle(20, 20 + 480 - 2, 4, 2, RAYWHITE);
                 DrawRectangle(20, 20 + 480 - 4, 2, 4, RAYWHITE);
-
+                // Draw bottom-right clipping
                 DrawRectangle(20 + 512 - 4, 20 + 480 - 2, 4, 2, RAYWHITE);
                 DrawRectangle(20 + 512 - 2, 20 + 480 - 4, 2, 4, RAYWHITE);
 
-                DrawTextEx(font, menuLabels[menuNumber].c_str(), Vector2{724 - MeasureTextEx(font, menuLabels[menuNumber].c_str(), 24, 1).x / 2, 20}, 24, 1, BLACK);
+                DrawTextEx(font, menuLabels[menuNumber].c_str(), Vector2{730 - MeasureTextEx(font, menuLabels[menuNumber].c_str(), 24, 1).x / 2, 20}, 24, 1, BLACK);
 
                 
                 for (Button* button : Button::buttons)
@@ -596,9 +660,16 @@ int main(int argc, char** argv)
 
 
         EndDrawing();
+
+        if (bus.audioBuffer.size() < 512)
+            PauseAudioStream(stream);
+        else if (bus.audioBuffer.size() > 1024)
+            PlayAudioStream(stream);
+
     }
 
     UnloadTexture(texture);
+    UnloadTexture(iconTex);
     UnloadFont(font);
 
     powerButton.~Button();

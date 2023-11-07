@@ -111,14 +111,15 @@ void APU::writeRegisters(uint8_t reg, uint8_t value)
         
         // Triangle
         case 0x08:
-            triangleChannel.control = (value & 0x80);
+            triangleChannel.linearCounterControl = (value & 0x80);
+            triangleChannel.lengthCounterHalt = (value & 0x80);
             triangleChannel.linearCounterReloadValue = (value & 0x7F);
             break;
         case 0x0A:
-            triangleChannel.sequencerReload = ((triangleChannel.sequencerReload & 0xFF00) | value);
+            triangleChannel.sequencerReload = ((triangleChannel.sequencerReload & 0x0700) | value);
             break;
         case 0x0B:
-            triangleChannel.sequencerReload = ((triangleChannel.sequencerReload & 0xFF) | ((value & 0x03) << 8));
+            triangleChannel.sequencerReload = ((triangleChannel.sequencerReload & 0x00FF) | ((value & 0x07) << 8));
             if (triangleChannel.enabled)
                 triangleChannel.lengthCounter = lengthCounterLoadTable[((value & 0xF8) >> 3)];
             triangleChannel.linearCounterReload = true;
@@ -313,7 +314,7 @@ void APU::clock()
     frameClockCounter = reset ? 0 : frameClockCounter + 1;
 }
 
-//#define USE_LINEAR_APPROX
+#define USE_LINEAR_APPROX
 
 double APU::getOutput()
 {

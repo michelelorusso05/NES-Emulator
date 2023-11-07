@@ -30,6 +30,9 @@ std::vector<Button*> Button::buttons;
 Bus bus;
 AudioStream stream;
 
+uint64_t underruns = 0;
+uint64_t audioFrequency = 48000;
+
 uint8_t counter = 1;
 bool mute = false;
 
@@ -39,19 +42,21 @@ bool mute = false;
 
 void Callback(void* buffer, unsigned int frames)
 {
-    int16_t* buf = (int16_t*) buffer;
+    int16_t* stream = reinterpret_cast<int16_t*>(buffer);
 
-    int16_t previous = bus.audioBuffer.front();
-    
-    for (unsigned int i = 0; i < frames; i++)
+    size_t numSamplesToRead = frames;
+
+    size_t numSamplesRead = bus.audioBuffer.PopBack(stream, numSamplesToRead);
+
+    // If we haven't written enough samples, fill out the rest with the last sample
+    // written. This will usually hide the error.
+    if (numSamplesRead < numSamplesToRead)
     {
-        buf[i] = bus.audioBuffer.front();
-        if (bus.audioBuffer.size() > 1)
-            bus.audioBuffer.pop();
+        int16_t lastSample = numSamplesRead == 0 ? 0 : stream[numSamplesRead - 1];
+        std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, lastSample);
 
-        buf[i] *= !mute;
+        underruns++;
     }
-
 }
 
 int keyboardMappings[8] =
@@ -136,13 +141,12 @@ int main(int argc, char** argv)
     UnloadImage(temp);
 
     InitAudioDevice();
-    SetAudioStreamBufferSizeDefault(128);
-    stream = LoadAudioStream(48000, 16, 1);
-    bus.SetAudioFrequency(48000);
+    SetAudioStreamBufferSizeDefault(512);
+    stream = LoadAudioStream(audioFrequency, 16, 1);
+    bus.SetAudioFrequency(audioFrequency);
 
+    StopAudioStream(stream);
     SetAudioStreamCallback(stream, Callback);
-
-    PlayAudioStream(stream);
 
     Font font = LoadFont_PixelNES();
 
@@ -194,6 +198,7 @@ int main(int argc, char** argv)
     };
 
     Button selectRomButton(oButtonData, false, 602, 402, KEY_O, [&]() {
+        PauseAudioStream(stream);
         const char* file = tinyfd_openFileDialog("Load NES rom", GetApplicationDirectory(), 1, filters, NULL, 0);
         if (file != NULL)
         {
@@ -213,10 +218,12 @@ int main(int argc, char** argv)
                 bus.LoadRom(cartridge);
             }
         }
+        ResumeAudioStream(stream);
     });
 
     Button muteButton(mButtonData, false, 602, 402, KEY_M, [&]() {
         mute = !mute;
+        SetAudioStreamVolume(stream, mute ? 0 : 1);
     });
 
     // Credits
@@ -332,8 +339,22 @@ int main(int argc, char** argv)
           
         if (true ^ IsKeyDown(KEY_SPACE))
         {
+            ResumeAudioStream(stream);
             // PPU frames are aligned to real frames
             while (!bus.busClock());
+        }
+        else
+            PauseAudioStream(stream);
+
+        if (IsKeyPressed(KEY_UP))
+        {
+            audioFrequency += 10;
+            bus.SetAudioFrequency(audioFrequency);
+        }
+        if (IsKeyPressed(KEY_DOWN))
+        {
+            audioFrequency -= 10;
+            bus.SetAudioFrequency(audioFrequency);
         }
 
         if (IsGamepadAvailable(0))
@@ -537,6 +558,14 @@ int main(int argc, char** argv)
                                 DrawRectangle(604, 98 + 50 * i, 252 * output, 4, GetColor(darkenedColor));
 
                             }
+
+                            sprintf(t, "Sample frequency: %dHz", audioFrequency);
+                            DrawTextEx(font, t, Vector2{602, 330}, 16, 1, BLACK);
+                            sprintf(t, "Buffer status: %d/%d", bus.audioBuffer.UsedSize(), bus.audioBuffer.TotalSize());
+                            DrawTextEx(font, t, Vector2{602, 350}, 16, 1, BLACK);
+                            sprintf(t, "Underruns: %d", underruns);
+                            DrawTextEx(font, t, Vector2{602, 370}, 16, 1, RED);
+
                             muteButton.SetEnabled(true);
                             DrawTextEx(font, "Toggle\nmute", Vector2{650, 407}, 20, 1, BLACK);
                             
@@ -661,11 +690,11 @@ int main(int argc, char** argv)
 
         EndDrawing();
 
-        if (bus.audioBuffer.size() < 512)
-            PauseAudioStream(stream);
-        else if (bus.audioBuffer.size() > 1024)
+        if (bus.audioBuffer.FreeSize() < 2048)
             PlayAudioStream(stream);
 
+        audioFrequency = LERP(audioFrequency, (48000 + (2048 - bus.audioBuffer.UsedSize())), (1.0f/GetFPS()));
+        bus.SetAudioFrequency(audioFrequency);
     }
 
     UnloadTexture(texture);

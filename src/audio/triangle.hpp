@@ -24,10 +24,8 @@ public:
             sequencerTimer = sequencerReload + 1;
 
             if (lengthCounter > 0 && linearCounterTimer > 0)
-                lookupTablePointer++;
+                lookupTablePointer = ((lookupTablePointer + 1) & 0x1F);
         }
-
-        output = ComputeOutput();
     }
     void ClockLengthCounter()
     {
@@ -35,7 +33,7 @@ public:
             lengthCounter = 0;
         else
         {
-            if (lengthCounter > 0 && !control)
+            if (lengthCounter > 0 && !lengthCounterHalt)
                 lengthCounter--;
         }
     }
@@ -50,17 +48,19 @@ public:
             linearCounterTimer--;
         }
 
-        if (!control)
+        if (!linearCounterControl)
         {
             linearCounterReload = false;
         }
     }
     uint8_t GetOutput()
     {
-        return output;
+        return ComputeOutput();
     }
     uint8_t ComputeOutput()
     {
+        if (sequencerReload <= 2)
+            return 0;
         return triangleLookup[lookupTablePointer & 0x1F];
     }
 
@@ -71,7 +71,8 @@ public:
 
     virtual void Reset() override
     {
-        control = false;
+        linearCounterControl = false;
+        lengthCounterHalt = false;
         linearCounterReloadValue = 0;
         sequencerReload = 0;
         sequencerTimer = 0;
@@ -83,7 +84,8 @@ public:
         enabled = false;
     }
 
-    bool control = false;
+    bool linearCounterControl = false;
+    bool lengthCounterHalt = false;
     uint8_t linearCounterReloadValue = 0;
     uint8_t linearCounterTimer = 0;
 

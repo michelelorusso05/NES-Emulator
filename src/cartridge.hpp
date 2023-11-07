@@ -15,12 +15,13 @@
 #include "mappers/mapper011.hpp"
 #include "mappers/mapper028.hpp"
 #include "mappers/mapper066.hpp"
+#include "mappers/mapper099.hpp"
 #include "mappers/mapper105.hpp"
 
 const static uint16_t supportedMappers[] = 
 {
         0,   1,   2,   3,   4,   7,   9,  11,
-       28,  66, 105
+       28,  66,  99, 105
 };
 
 class Cartridge 
@@ -151,6 +152,9 @@ public:
             case 66:
                 mapper = new Mapper066(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
+            case 99:
+                mapper = new Mapper099(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
+                break;
             case 105:
                 mapper = new Mapper105(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
                 break;
@@ -264,6 +268,14 @@ public:
     bool ArrangementUpdateRequired()
     {
         return mapper->ArrangementUpdatedRequired();
+    }
+    std::array<uint8_t, 1024>* GetFourWindowsC()
+    {
+        return mapper->GetAdditionalWindowRam(0);
+    }
+    std::array<uint8_t, 1024>* GetFourWindowsD()
+    {
+        return mapper->GetAdditionalWindowRam(1);
     }
 
     std::string GetFilename()

@@ -10,7 +10,9 @@
 #include "controller.hpp"
 
 #include <atomic>
-#include <queue>
+//#include <queue>
+
+#include "circularBuffer.hpp"
 
 // Sizes
 #define SIZE_INTERNAL_RAM       0x0800
@@ -31,7 +33,7 @@
 #define MASTER_CLOCK            236.25f * 1000000 / (11)
 #define PPU_DIVIDER             4
 
-#define AUDIO_BUFFER_SIZE       512
+#define AUDIO_BUFFER_SIZE       1024
 
 class Bus
 {
@@ -53,7 +55,9 @@ public:
     Bus()
     {
         for (uint8_t& i : wRam)
-            i = 0; 
+            i = 0;
+
+        audioBuffer.Init(4096);
     }
 
     void LoadRom(Cartridge* data)
@@ -227,7 +231,7 @@ public:
             elapsedAudioTime -= audioPeriod;
             lastGeneratedAudioSample = apu.getOutput();
 
-            audioBuffer.push(lastGeneratedAudioSample * 32767);
+            audioBuffer.PushBack(lastGeneratedAudioSample * 32767);
         }
         
         totalClockCycles++;
@@ -254,18 +258,8 @@ public:
     
     double lastGeneratedAudioSample = 0;
 
-    volatile bool init = false;
-
-    std::atomic_bool filled = {false};
-    std::atomic_bool mutex = {false};
-
-    int16_t* buf0 = new int16_t[AUDIO_BUFFER_SIZE];
-    int16_t* buf1 = new int16_t[AUDIO_BUFFER_SIZE];
-
-    int16_t* currentBuffer = buf0;
-    int16_t* usableBuffer = buf1;
-
-    std::queue<int16_t> audioBuffer;
+    // std::queue<int16_t> audioBuffer;
+    CircularBuffer<int16_t> audioBuffer;
 
 private:
     uint8_t fetched;
@@ -275,6 +269,4 @@ private:
     // NTSC crystal timing
     const double timePerNESClock = 1.0 / 5369318.0;
     double elapsedAudioTime = 0;
-
-    uint64_t audioPointer = 0;
 };

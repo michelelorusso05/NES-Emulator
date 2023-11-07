@@ -1100,5 +1100,11 @@ void PPU::SetArrangement(Mapper::Arrangement arr)
             windows[2] = &vRamBank1;
             windows[3] = &vRamBank1;
             break;
+        case Mapper::Arrangement::FOUR_SCREENS:
+            windows[0] = &vRamBank0;
+            windows[1] = &vRamBank1;
+            windows[2] = cartridge->GetFourWindowsC();
+            windows[3] = cartridge->GetFourWindowsD();
+            break;
     }
 }

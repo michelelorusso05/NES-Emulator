@@ -46,6 +46,10 @@ public:
         arrangementUpdated = false;
         return a;
     }
+    virtual std::array<uint8_t, 1024>* GetAdditionalWindowRam(uint8_t window)
+    {
+        return nullptr;
+    }
 
     virtual bool checkIRQ()
     {

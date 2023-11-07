@@ -15,13 +15,14 @@ public:
     {
         if (addr >= 0x8000 && addr <= 0xFFFF)
         {
-            mappedAddr = (pBanks > 1) ? (addr & 0x7FFF) : (addr & 0x3FFF);
+            mappedAddr = ((pBanks > 1) ? (addr & 0x7FFF) : (addr & 0x3FFF));
             return true;
         }
         return false;
     }
     bool prgBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) override
     {
+        return false;
         if (addr >= 0x8000 && addr <= 0xFFFF)
         {
             chrRomSelect = data;

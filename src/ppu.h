@@ -69,7 +69,6 @@ public:
 
     // Register 0x2004
     uint8_t oamData;
-
 private:
     /*
         Sets the window arrangement.

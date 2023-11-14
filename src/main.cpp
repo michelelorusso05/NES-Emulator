@@ -31,10 +31,7 @@ Bus bus;
 AudioStream stream;
 
 uint64_t underruns = 0;
-uint64_t audioFrequency = 48000;
-
-uint8_t counter = 1;
-bool mute = false;
+int audioFrequency = SAMPLING_FREQUENCY;
 
 #define LERP(a, b, t) a * (1 - t) + b * t
 #define FRAC(a) a - (int)a
@@ -46,17 +43,20 @@ void Callback(void* buffer, unsigned int frames)
 
     size_t numSamplesToRead = frames;
 
-    size_t numSamplesRead = bus.audioBuffer.PopBack(stream, numSamplesToRead);
+    bus.mutex = true;
 
-    // If we haven't written enough samples, fill out the rest with the last sample
-    // written. This will usually hide the error.
+    size_t numSamplesRead = bus.audioBuffer.PopBack(stream, numSamplesToRead);
+    // Fill any spaces left empty by underruns with the last generated sample
     if (numSamplesRead < numSamplesToRead)
     {
+        // If we didn't generate any sample (yikes) just fill in zeroes
         int16_t lastSample = numSamplesRead == 0 ? 0 : stream[numSamplesRead - 1];
         std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, lastSample);
 
         underruns++;
     }
+
+    bus.mutex = false;
 }
 
 int keyboardMappings[8] =
@@ -135,17 +135,19 @@ int main(int argc, char** argv)
 
     Texture2D iconTex = LoadTextureFromImage(temp);
 
-    ImageResize(&temp, 128, 128);
+    //ImageResize(&temp, 128, 128);
 
     SetWindowIcon(temp);
-    UnloadImage(temp);
+    //UnloadImage(temp);
 
     InitAudioDevice();
     SetAudioStreamBufferSizeDefault(512);
     stream = LoadAudioStream(audioFrequency, 16, 1);
     bus.SetAudioFrequency(audioFrequency);
 
-    StopAudioStream(stream);
+    bool waitForAudioBufferFill = true;
+
+    PauseAudioStream(stream);
     SetAudioStreamCallback(stream, Callback);
 
     Font font = LoadFont_PixelNES();
@@ -158,6 +160,7 @@ int main(int argc, char** argv)
     Cartridge *cartridge = nullptr;
     bus.reset();
 
+    // Load ROM from command line
     if (argc > 1)
     {
         std::string path = argv[1];
@@ -199,7 +202,9 @@ int main(int argc, char** argv)
 
     Button selectRomButton(oButtonData, false, 602, 402, KEY_O, [&]() {
         PauseAudioStream(stream);
+        waitForAudioBufferFill = true;
         const char* file = tinyfd_openFileDialog("Load NES rom", GetApplicationDirectory(), 1, filters, NULL, 0);
+        
         if (file != NULL)
         {
             if (cartridge != nullptr)
@@ -218,8 +223,9 @@ int main(int argc, char** argv)
                 bus.LoadRom(cartridge);
             }
         }
-        ResumeAudioStream(stream);
     });
+
+    bool mute = false;
 
     Button muteButton(mButtonData, false, 602, 402, KEY_M, [&]() {
         mute = !mute;
@@ -256,7 +262,10 @@ int main(int argc, char** argv)
 
     onMenuChanged();
 
+    // Common buffer for text formatting
     char t[64];
+
+    // String buffers for controller names
     std::string p1String;
     std::string p2String;
 
@@ -330,6 +339,8 @@ int main(int argc, char** argv)
                 SetWindowSize(GetMonitorWidth(cachedMonitor), GetMonitorHeight(cachedMonitor));
             }
             ToggleFullscreen();
+            waitForAudioBufferFill = true;
+            PauseAudioStream(stream);
         }
 
         if (IsKeyPressed(KEY_C))
@@ -337,9 +348,10 @@ int main(int argc, char** argv)
             bus.cpu.clockUntilInstruction();
         }
           
-        if (true ^ IsKeyDown(KEY_SPACE))
+        if (!IsKeyDown(KEY_SPACE))
         {
-            ResumeAudioStream(stream);
+            if (!waitForAudioBufferFill)
+                ResumeAudioStream(stream);
             // PPU frames are aligned to real frames
             while (!bus.busClock());
         }
@@ -447,6 +459,7 @@ int main(int argc, char** argv)
                 ShowCursor();
                 if (expandedView)
                 {
+                    // Draw debug layout lines
                     /*
                     if (mute)
                     {
@@ -474,7 +487,8 @@ int main(int argc, char** argv)
                                 uint8_t nBanks = bus.rom->header.chrRomBanks;
                                 if (nBanks == 0)
                                 {
-                                    DrawTextEx(font, "8KB CHR-RAM", Vector2{602, 180}, 20, 1, BLACK);
+                                    sprintf(t, "%dKB CHR-RAM", 8);
+                                    DrawTextEx(font, t, Vector2{602, 180}, 20, 1, BLACK);
                                 }
                                 else
                                 {
@@ -490,14 +504,30 @@ int main(int argc, char** argv)
                                 }
                                 else
                                 {
-                                    sprintf(t, "%d (using mapper 0)", bus.rom->mapperID);
+                                    sprintf(t, "%d", bus.rom->mapperID);
                                     DrawTextEx(font, t, Vector2{602, 230}, 20, 1, RED);
                                 }
 
-                                if (bus.rom->IsVsGame())
+
+                                if (!bus.rom->IsMapperSupported())
+                                {
+                                    DrawTextEx(font, "Notes: ", Vector2{602, 260}, 16, 1, GRAY);
+                                    DrawTextEx(font, "This mapper is\nnot supported\n(trying to use mapper 0)", Vector2{602, 280}, 16, 1, RED);
+                                }
+                                else if (bus.rom->IsVsGame())
                                 {
                                     DrawTextEx(font, "Notes: ", Vector2{602, 260}, 16, 1, GRAY);
                                     DrawTextEx(font, "VS. System games are\nnot supported", Vector2{602, 280}, 16, 1, RED);
+                                }
+                                else if (bus.rom->IsPALGame())
+                                {
+                                    DrawTextEx(font, "Notes: ", Vector2{602, 260}, 16, 1, GRAY);
+                                    DrawTextEx(font, "PAL games may not\nfunction correctly", Vector2{602, 280}, 16, 1, RED);
+                                }
+                                else if (bus.rom->IsNES2Header())
+                                {
+                                    DrawTextEx(font, "Notes: ", Vector2{602, 260}, 16, 1, GRAY);
+                                    DrawTextEx(font, "NES 2.0 is not supported.\nThe game may not work", Vector2{602, 280}, 16, 1, RED);
                                 }
                                 else if (bus.rom->HasSave())
                                 {
@@ -654,7 +684,7 @@ int main(int argc, char** argv)
                             DrawTextureEx(iconTex, Vector2{622, 151}, 0, 2, WHITE);
                             DrawTextEx(font, "RICOcHet", Vector2{694, 151}, 24, 1, BLACK);
                             DrawTextEx(font, "By Michele\nLorusso", Vector2{694, 181}, 16, 1, GRAY); 
-                            DrawTextEx(font, "1.0 - 01/11/2023", Vector2{636, 225}, 16, 1, GRAY);
+                            DrawTextEx(font, "1.0 - 13/11/2023", Vector2{636, 225}, 16, 1, GRAY);
 
                             break;
                         }
@@ -690,18 +720,24 @@ int main(int argc, char** argv)
 
         EndDrawing();
 
-        if (bus.audioBuffer.FreeSize() < 2048)
+        if (bus.audioBuffer.UsedSize() > AUDIO_BUFFER_SIZE / 2)
+        {
             PlayAudioStream(stream);
+            waitForAudioBufferFill = false;
+        }
 
-        audioFrequency = LERP(audioFrequency, (48000 + (2048 - bus.audioBuffer.UsedSize())), (1.0f/GetFPS()));
+        // Dynamically change the sampling frequency to avoid underruns and overruns
+        audioFrequency = LERP(audioFrequency, (SAMPLING_FREQUENCY + (AUDIO_BUFFER_SIZE / 2 - bus.audioBuffer.UsedSize())), (1.0f/GetFPS()));
+        // Limit the change to +/- 500Hz to avoid drastic changes in pitch
+        audioFrequency = (audioFrequency > SAMPLING_FREQUENCY + 500) ? (SAMPLING_FREQUENCY + 500) : audioFrequency;
+        audioFrequency = (audioFrequency < SAMPLING_FREQUENCY - 500) ? (SAMPLING_FREQUENCY - 500) : audioFrequency;
         bus.SetAudioFrequency(audioFrequency);
     }
 
     UnloadTexture(texture);
     UnloadTexture(iconTex);
-    UnloadFont(font);
 
-    powerButton.~Button();
+    Button::ClearButtons();
 
     CloseWindow();
 

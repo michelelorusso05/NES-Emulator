@@ -22,7 +22,6 @@ public:
     }
     bool prgBankWrite(uint16_t addr, uint32_t& mappedAddr, uint8_t data) override
     {
-        return false;
         if (addr >= 0x8000 && addr <= 0xFFFF)
         {
             chrRomSelect = data;

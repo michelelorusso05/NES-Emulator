@@ -314,7 +314,7 @@ void APU::clock()
     frameClockCounter = reset ? 0 : frameClockCounter + 1;
 }
 
-#define USE_LINEAR_APPROX
+//#define USE_LINEAR_APPROX
 
 double APU::getOutput()
 {

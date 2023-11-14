@@ -88,6 +88,8 @@ public:
                      header.headerSignature[2] == 0x53 &&
                      header.headerSignature[3] == 0x1A;
 
+        isNES2 = ((header.mapperHiAndFlags7 & 0b00001100) == 0b00001000);
+
         if (!isRomValid)
         {
             inputStream.close();
@@ -147,7 +149,7 @@ public:
                 mapper = new Mapper028(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
             case 34:
-                mapper = new Mapper028(header.prgRomBanks, header.chrRomBanks, arr);
+                mapper = new Mapper011(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
             case 66:
                 mapper = new Mapper066(header.prgRomBanks, header.chrRomBanks, arr);
@@ -157,6 +159,9 @@ public:
                 break;
             case 105:
                 mapper = new Mapper105(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
+                break;
+            case 180:
+                mapper = new Mapper003(header.prgRomBanks, header.chrRomBanks, arr);
                 break;
             default:
                 mapper = new Mapper000(header.prgRomBanks, header.chrRomBanks, arr, &prgRam);
@@ -298,6 +303,11 @@ public:
         return isPalGame;
     }
 
+    bool IsNES2Header()
+    {
+        return isNES2;
+    }
+
     bool HasSave()
     {
         return hasSave;
@@ -325,8 +335,9 @@ private:
     uint32_t mapAddr;
 
     bool isVsGame;
-    bool isPalGame;
+    bool isPalGame = false;
     bool hasSave;
+    bool isNES2;
 
     std::string savefilePath;
 };

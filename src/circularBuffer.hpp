@@ -263,9 +263,9 @@ private:
 	}
 
 	std::vector<T> m_buffer;
-	T* m_begin;
-	T* m_end;
-	T* m_front;
-	T* m_back;
-	int m_wrapped;
+	volatile T* m_begin;
+	volatile T* m_end;
+	volatile T* m_front;
+	volatile T* m_back;
+	volatile int m_wrapped;
 };

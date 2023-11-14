@@ -6,13 +6,13 @@ BEGIN
   BEGIN
     BLOCK "080904E4"
     BEGIN
+      VALUE "ProductName", "RICOcHet"
       VALUE "CompanyName", "Michele Lorusso"
-      VALUE "FileDescription", "A basic NES emulator written in C++ using Raylib."
+      VALUE "FileDescription", "RICOcHet NES emulator"
       VALUE "FileVersion", "1.0"
       VALUE "InternalName", "nes_emu"
       VALUE "LegalCopyright", "None lol"
       VALUE "OriginalFilename", "ricochet.exe"
-      VALUE "ProductName", "RICOcHet"
       VALUE "ProductVersion", "1.0"
     END
   END

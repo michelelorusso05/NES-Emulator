@@ -10,7 +10,7 @@
 #include "controller.hpp"
 
 #include <atomic>
-//#include <queue>
+#include <queue>
 
 #include "circularBuffer.hpp"
 
@@ -33,7 +33,10 @@
 #define MASTER_CLOCK            236.25f * 1000000 / (11)
 #define PPU_DIVIDER             4
 
-#define AUDIO_BUFFER_SIZE       1024
+// Audio constants
+#define SAMPLING_FREQUENCY      48000
+#define MS_LATENCY              60
+const int AUDIO_BUFFER_SIZE = (MS_LATENCY / 1000.0f) * SAMPLING_FREQUENCY * 2;
 
 class Bus
 {
@@ -57,7 +60,7 @@ public:
         for (uint8_t& i : wRam)
             i = 0;
 
-        audioBuffer.Init(4096);
+        audioBuffer.Init(AUDIO_BUFFER_SIZE);
     }
 
     void LoadRom(Cartridge* data)
@@ -230,8 +233,9 @@ public:
         {
             elapsedAudioTime -= audioPeriod;
             lastGeneratedAudioSample = apu.getOutput();
-
+            while (mutex);
             audioBuffer.PushBack(lastGeneratedAudioSample * 32767);
+            //audioBuffer.push(lastGeneratedAudioSample * 32767);
         }
         
         totalClockCycles++;
@@ -260,6 +264,7 @@ public:
 
     // std::queue<int16_t> audioBuffer;
     CircularBuffer<int16_t> audioBuffer;
+    volatile bool mutex = false;
 
 private:
     uint8_t fetched;

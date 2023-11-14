@@ -111,7 +111,7 @@ public:
     {
         if (cBanks == 0 && addr >= 0x0000 && addr <= 0x1FFF)
         {
-            mappedAddr = addr;
+            mappedAddr = (((regChrBank & 0x03) << 13) | (addr & 0x1FFF));
             return true;
         }
         return false;

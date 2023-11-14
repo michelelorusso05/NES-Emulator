@@ -39,6 +39,8 @@ public:
     }
     Button(ButtonTexture data, bool reverseX, int x, int y, int associatedKey, std::function<void(void)> action)
     {
+        Image memCopy;
+
         Image temp = { 0 };
         temp.data = data.normalState;
         temp.format = data.format;
@@ -46,19 +48,24 @@ public:
         temp.width = data.width;
         temp.mipmaps = 1;
 
-        if (reverseX)
-            ImageFlipHorizontal(&temp);
+        // Load a copy of the image data into memory to manipulate it
+        memCopy = ImageFromImage(temp, Rectangle{.x = 0, .y = 0, .width = (float) temp.width, .height = (float)temp.height});
 
-        normal = LoadTextureFromImage(temp);
-        UnloadImage(temp);
+        if (reverseX)
+            ImageFlipHorizontal(&memCopy);        
+
+        normal = LoadTextureFromImage(memCopy);
+        UnloadImage(memCopy);
+
 
         temp.data = data.pressedState;
+        memCopy = ImageFromImage(temp, Rectangle{.x = 0, .y = 0, .width = (float) temp.width, .height = (float)temp.height});
 
         if (reverseX)
-            ImageFlipHorizontal(&temp);
+            ImageFlipHorizontal(&memCopy);
 
-        pressed = LoadTextureFromImage(temp);
-        UnloadImage(temp);
+        pressed = LoadTextureFromImage(memCopy);
+        UnloadImage(memCopy);
 
         position = Vector2{(float) x, (float) y};
 
@@ -85,6 +92,13 @@ public:
             }
         }
     }
+
+    static void ClearButtons()
+    {
+        for (int i = buttons.size() - 1; i >= 0; i--)
+            buttons.erase(buttons.begin() + i);
+    }
+
     void Update()
     {
         if (callbackQueued)
